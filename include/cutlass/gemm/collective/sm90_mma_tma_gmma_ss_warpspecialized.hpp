@@ -391,6 +391,30 @@ struct CollectiveMma<
     Tensor tCrA = thread_mma.make_fragment_A(tCsA);                                           // (MMA,MMA_M,MMA_K,PIPE)
     Tensor tCrB = thread_mma.make_fragment_B(tCsB);                                           // (MMA,MMA_N,MMA_K,PIPE)
 
+#if 0
+    static int iter = 0;
+    if (thread_idx==0  && iter==0   && blockIdx.x==0
+                                    && blockIdx.y==0
+                                    && blockIdx.z==0)
+    {
+      iter += 1;
+      print("SmemLayoutA: "); print(SmemLayoutA{}); print("\n");
+      print("SmemLayoutB: "); print(SmemLayoutB{}); print("\n");
+      print("SmemLayoutAtomA: "); print(SmemLayoutAtomA{}); print("\n");
+      print("SmemLayoutAtomB: "); print(SmemLayoutAtomB{}); print("\n");
+      print("tCrA: "); print(tCrA(0)); print("\n");
+      print("tCrB: "); print(tCrB.layout()); print("\n");
+      print("tCsA: "); print(tCsA.layout()); print(" "); print(sizeof(tCsA(0,0,0,0))); print("\n");
+      print("sA: "); print(sA.layout()); print(" "); print(sizeof(sA(0,0,0))); print("\n");
+      print("GmmaDescriptor: "); print(sizeof(GmmaDescriptor)); print("\n");
+      print("TileShape        : "); print(TileShape{}); print("\n");
+      print("sA_layout        : "); print(sA.layout()); print("\n");
+      print("sB_layout        : "); print(sB.layout()); print("\n");
+      print("tCsA_layout      : "); print(tCsA.layout()); print("\n");
+      print("tCsB_layout      : "); print(tCsB.layout()); print("\n");
+    }
+#endif
+
     CUTE_STATIC_ASSERT_V(size<1>(tCsA) == size<1>(accum));                                                         // M
     CUTE_STATIC_ASSERT_V(size<1>(tCsB) == size<2>(accum));                                                         // N
     CUTE_STATIC_ASSERT_V(size<2>(tCsA) == size<2>(tCsB));                                                          // K

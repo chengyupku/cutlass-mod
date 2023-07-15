@@ -388,7 +388,7 @@ public:
 
     // Represent the full output tensor
     Tensor mD_mnl = params.tma_store_d.get_tma_tensor(make_shape(M,N,L));                                    // (m,n,l)
-    Tensor gD_mnl = local_tile(mD_mnl, tile_shape_MNK, make_coord(_,_,_), Step<_1,_1, X>{});   // (TILE_M,TILE_N,m,n,l)
+    Tensor gD_mnl = local_tile(mD_mnl, tile_shape_MNK, make_coord(_,_,_), Step<_1,_1, X>{});   // (TILE_M,TILE_N,m/TILE_M,n/TILE_N,l)
 
     // Slice to get the tile this CTA is responsible for
     auto [m_coord, n_coord, k_coord, l_coord] = tile_coord_mnkl;
@@ -437,6 +437,38 @@ public:
                     thrblk_s2g.partition_S(recast<ElementD>(bEsC)),                    // (S2G,S2G_M,S2G_N,EPI_M,EPI_N)
                     thrblk_s2g.partition_S(bEsD) );                                    //        (S2G,S2G_M,S2G_N,PIPE)
     Tensor tSG_gD = thrblk_s2g.partition_D(bEgD);                                      // (S2G,S2G_M,S2G_N,EPI_M,EPI_N)
+
+#if 0
+    static int iter = 0;
+    if (thread_idx==0  && iter==0   && blockIdx.x==0
+                                    && blockIdx.y==0
+                                    && blockIdx.z==0)
+    {
+      iter += 1;
+      print("TileShapeMNK        : "); print(TileShapeMNK{}); print("\n");
+      print("TileCoordMNKL        : "); print(TileCoordMNKL{}); print("\n");
+      print("EpilogueTileShape        : "); print(EpilogueTileShape{}); print("\n");
+      print("mD_mnl        : "); print(mD_mnl.layout()); print("\n");
+      print("gD_mnl        : "); print(gD_mnl.layout()); print("\n");
+      print("gD      : "); print(gD.layout()); print("\n");
+      print("sC      : "); print(sC.layout()); print("\n");
+      print("bEsD      : "); print(bEsD.layout()); print("\n");
+      print("bEsC      : "); print(bEsC.layout()); print("\n");
+      print("tiled_r2s      : \n######################\n"); print(tiled_r2s); print("\n######################\n");
+      print("tiled_s2r      : \n######################\n"); print(tiled_s2r); print("\n######################\n");
+      print("tRS_rAcc      : "); print(tRS_rAcc.layout()); print("\n");
+      print("tRS_sD      : "); print(tRS_sD.layout()); print("\n");
+      print("accumulators      : "); print(accumulators.layout()); print("\n");
+      print("tRS_rC      : "); print(tRS_rC.layout()); print("\n");
+      print("tRS_rD      : "); print(tRS_rD.layout()); print("\n");
+      print("tRS_rAcc_frg      : "); print(tRS_rAcc_frg.layout()); print("\n");
+      print("tRS_rC_frg      : "); print(tRS_rC_frg.layout()); print("\n");
+      print("tRS_rD_frg      : "); print(tRS_rD_frg.layout()); print("\n");
+      print("tSR_sC      : "); print(tSR_sC.layout()); print("\n");
+      print("tSR_rC      : "); print(tSR_rC.layout()); print("\n");
+      print("tiled_mma      : "); print(tiled_mma); print("\n");
+    }
+#endif
 
     CUTE_STATIC_ASSERT(size<0>(tRS_rAcc) % ThreadEpilogueOp::kCount == 0, "ThreadEpilogueOp does not vectorize properly");
     CUTE_STATIC_ASSERT(mma_tile_m == epi_tile_m, "EPI_TILE_M must equal MMA_TILE_M");
