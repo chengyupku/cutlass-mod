@@ -93,6 +93,27 @@ public:
   CUTLASS_DEVICE
   WorkTileInfo
   get_current_work(Params const& scheduler_params) const {
+#if 0
+  static int iter = 0;
+  if (threadIdx.x==0 && iter == 0  && blockIdx.x==0
+                                  && blockIdx.y==0
+                                  && blockIdx.z==0)
+  {
+    iter += 1;
+    print("divmod_batch_ :%d, %d, %d, %d\n",  scheduler_params.divmod_batch_.divisor,
+                                              scheduler_params.divmod_batch_.multiplier,
+                                              scheduler_params.divmod_batch_.shift_right,
+                                              scheduler_params.divmod_batch_.round_up);
+    print("divmod_grid_y_ :%d, %d, %d, %d\n", scheduler_params.divmod_grid_y_.divisor,
+                                              scheduler_params.divmod_grid_y_.multiplier,
+                                              scheduler_params.divmod_grid_y_.shift_right,
+                                              scheduler_params.divmod_grid_y_.round_up);
+    print("divmod_blk_m_ :%d, %d, %d, %d\n",  scheduler_params.divmod_blk_m_.divisor,
+                                              scheduler_params.divmod_blk_m_.multiplier,
+                                              scheduler_params.divmod_blk_m_.shift_right,
+                                              scheduler_params.divmod_blk_m_.round_up);
+  }
+#endif
     // Map worker's linear index into the CTA tiled problem shape to the corresponding MNL indices
     uint64_t work_idx_l, remainder;
     scheduler_params.divmod_batch_(work_idx_l, remainder, current_work_linear_idx_);

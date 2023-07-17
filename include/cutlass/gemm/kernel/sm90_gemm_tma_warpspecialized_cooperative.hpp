@@ -432,6 +432,19 @@ public:
         // Get next work tile
         scheduler.advance_to_next_work();
         work_tile_info = scheduler.get_current_work(params.scheduler);
+#if 0
+        if (thread_idx==0               && blockIdx.x==0
+                                        && blockIdx.y==0
+                                        && blockIdx.z==0)
+        {
+          print("work_tile_info      : "); 
+          print("%d, ", work_tile_info.M_idx);
+          print("%d, ", work_tile_info.N_idx);
+          print("%d, ", work_tile_info.L_idx);
+          print("%u",   work_tile_info.is_valid_tile);
+          print("\n");
+        }
+#endif
       } // Scheduler work fetch loop
 
       // Make sure all Consumer Warp Groups have been waited upon

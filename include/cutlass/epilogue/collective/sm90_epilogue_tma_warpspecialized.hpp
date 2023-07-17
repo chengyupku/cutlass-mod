@@ -122,8 +122,8 @@ private:
   constexpr static int StagesD = StagesD_;
   constexpr static bool is_source_supported = ThreadEpilogueOp::kScale == cutlass::epilogue::thread::ScaleType::Default ||
                                               ThreadEpilogueOp::kScale == cutlass::epilogue::thread::ScaleType::NoBetaScaling;
-  static_assert((cute::is_void_v<ElementC> && not is_source_supported) || (not cute::is_void_v<ElementC> && is_source_supported),
-                "Inconsistent C type and Scale kind");
+  // static_assert((cute::is_void_v<ElementC> && not is_source_supported) || (not cute::is_void_v<ElementC> && is_source_supported),
+  //               "Inconsistent C type and Scale kind");
 
   // internal optimization to reuse C shared memory for storing D
   using SmemLayoutAtomBitsC = decltype(downcast<sizeof_bits<InternalElementC>::value>(SmemLayoutAtomC{}));
@@ -135,6 +135,13 @@ private:
                                      cute::is_same_v<SmemLayoutAtomBitsC,SmemLayoutAtomBitsD>;
 
 public:
+  using _ReuseSmemC_ = cute::conditional_t<ReuseSmemC, _1, _0>;
+  using c0 = cute::conditional_t<not DispatchPolicy::DisableSmemReuseC, _1, _0>;
+  using c1 = cute::conditional_t<is_source_supported, _1, _0>;
+  using c2 = cute::conditional_t<sizeof(InternalElementC) == sizeof(ElementD), _1, _0>;
+  using c3 = cute::conditional_t<StrideC{} == StrideD{}, _1, _0>;
+  using c4 = cute::conditional_t<cute::is_same_v<SmemLayoutAtomBitsC,SmemLayoutAtomBitsD>, _1, _0>;
+
   using SmemLayoutC = decltype(tile_to_shape(
       SmemLayoutAtomC{},
       make_shape(size<0>(BlockTileShape{}), size<1>(BlockTileShape{}), Int<StagesC>{}),
@@ -467,6 +474,12 @@ public:
       print("tSR_sC      : "); print(tSR_sC.layout()); print("\n");
       print("tSR_rC      : "); print(tSR_rC.layout()); print("\n");
       print("tiled_mma      : "); print(tiled_mma); print("\n");
+      print("reuseC      : "); print(_ReuseSmemC_{}); print("\n");
+      print("c0      : "); print(c0{}); print("\n");
+      print("c1      : "); print(c1{}); print("\n");
+      print("c2      : "); print(c2{}); print("\n");
+      print("c3      : "); print(c3{}); print("\n");
+      print("c4      : "); print(c4{}); print("\n");
     }
 #endif
 

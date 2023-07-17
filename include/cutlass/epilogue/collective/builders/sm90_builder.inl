@@ -294,7 +294,7 @@ public:
   using ElementC = cute::conditional_t<cute::is_void_v<ElementC_>,ElementD,ElementC_>; // prevents void ref breakages
   static constexpr thread::ScaleType::Kind ScaleType = cute::is_void_v<ElementC_> ?
       thread::ScaleType::OnlyAlphaScaling : thread::ScaleType::Default;
-  // static constexpr thread::ScaleType::Kind ScaleType = thread::ScaleType::Nothing;
+  // static constexpr thread::ScaleType::Kind ScaleType = thread::ScaleType::Default;
 
   static constexpr int FragmentSize = 4;
   using ThreadOp = thread::LinearCombination<
