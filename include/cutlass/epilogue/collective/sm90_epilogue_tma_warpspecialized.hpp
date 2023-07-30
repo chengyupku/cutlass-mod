@@ -120,8 +120,9 @@ private:
   using InternalElementC = cute::conditional_t<cute::is_void_v<ElementC>,ElementD,ElementC>; // prevents void ref breakages
   constexpr static int StagesC = StagesC_;
   constexpr static int StagesD = StagesD_;
-  constexpr static bool is_source_supported = ThreadEpilogueOp::kScale == cutlass::epilogue::thread::ScaleType::Default ||
-                                              ThreadEpilogueOp::kScale == cutlass::epilogue::thread::ScaleType::NoBetaScaling;
+  // constexpr static bool is_source_supported = ThreadEpilogueOp::kScale == cutlass::epilogue::thread::ScaleType::Default ||
+  //                                             ThreadEpilogueOp::kScale == cutlass::epilogue::thread::ScaleType::NoBetaScaling;
+  constexpr static bool is_source_supported = false;
   // static_assert((cute::is_void_v<ElementC> && not is_source_supported) || (not cute::is_void_v<ElementC> && is_source_supported),
   //               "Inconsistent C type and Scale kind");
 
@@ -452,34 +453,34 @@ public:
                                     && blockIdx.z==0)
     {
       iter += 1;
-      print("TileShapeMNK        : "); print(TileShapeMNK{}); print("\n");
-      print("TileCoordMNKL        : "); print(TileCoordMNKL{}); print("\n");
-      print("EpilogueTileShape        : "); print(EpilogueTileShape{}); print("\n");
-      print("mD_mnl        : "); print(mD_mnl.layout()); print("\n");
-      print("gD_mnl        : "); print(gD_mnl.layout()); print("\n");
-      print("gD      : "); print(gD.layout()); print("\n");
-      print("sC      : "); print(sC.layout()); print("\n");
-      print("bEsD      : "); print(bEsD.layout()); print("\n");
-      print("bEsC      : "); print(bEsC.layout()); print("\n");
-      print("tiled_r2s      : \n######################\n"); print(tiled_r2s); print("\n######################\n");
-      print("tiled_s2r      : \n######################\n"); print(tiled_s2r); print("\n######################\n");
-      print("tRS_rAcc      : "); print(tRS_rAcc.layout()); print("\n");
-      print("tRS_sD      : "); print(tRS_sD.layout()); print("\n");
-      print("accumulators      : "); print(accumulators.layout()); print("\n");
-      print("tRS_rC      : "); print(tRS_rC.layout()); print("\n");
-      print("tRS_rD      : "); print(tRS_rD.layout()); print("\n");
-      print("tRS_rAcc_frg      : "); print(tRS_rAcc_frg.layout()); print("\n");
-      print("tRS_rC_frg      : "); print(tRS_rC_frg.layout()); print("\n");
-      print("tRS_rD_frg      : "); print(tRS_rD_frg.layout()); print("\n");
-      print("tSR_sC      : "); print(tSR_sC.layout()); print("\n");
-      print("tSR_rC      : "); print(tSR_rC.layout()); print("\n");
+      // print("TileShapeMNK        : "); print(TileShapeMNK{}); print("\n");
+      // print("TileCoordMNKL        : "); print(TileCoordMNKL{}); print("\n");
+      // print("EpilogueTileShape        : "); print(EpilogueTileShape{}); print("\n");
+      // print("mD_mnl        : "); print(mD_mnl.layout()); print("\n");
+      // print("gD_mnl        : "); print(gD_mnl.layout()); print("\n");
+      // print("gD      : "); print(gD.layout()); print("\n");
+      // print("sC      : "); print(sC.layout()); print("\n");
+      // print("bEsD      : "); print(bEsD.layout()); print("\n");
+      // print("bEsC      : "); print(bEsC.layout()); print("\n");
+      // print("tiled_r2s      : \n######################\n"); print(tiled_r2s); print("\n######################\n");
+      // print("tiled_s2r      : \n######################\n"); print(tiled_s2r); print("\n######################\n");
+      // print("tRS_rAcc      : "); print(tRS_rAcc.layout()); print("\n");
+      // print("tRS_sD      : "); print(tRS_sD.layout()); print("\n");
+      // print("accumulators      : "); print(accumulators.layout()); print("\n");
+      // print("tRS_rC      : "); print(tRS_rC.layout()); print("\n");
+      // print("tRS_rD      : "); print(tRS_rD.layout()); print("\n");
+      // print("tRS_rAcc_frg      : "); print(tRS_rAcc_frg.layout()); print("\n");
+      // print("tRS_rC_frg      : "); print(tRS_rC_frg.layout()); print("\n");
+      // print("tRS_rD_frg      : "); print(tRS_rD_frg.layout()); print("\n");
+      // print("tSR_sC      : "); print(tSR_sC.layout()); print("\n");
+      // print("tSR_rC      : "); print(tSR_rC.layout()); print("\n");
       print("tiled_mma      : "); print(tiled_mma); print("\n");
-      print("reuseC      : "); print(_ReuseSmemC_{}); print("\n");
-      print("c0      : "); print(c0{}); print("\n");
-      print("c1      : "); print(c1{}); print("\n");
-      print("c2      : "); print(c2{}); print("\n");
-      print("c3      : "); print(c3{}); print("\n");
-      print("c4      : "); print(c4{}); print("\n");
+      // print("reuseC      : "); print(_ReuseSmemC_{}); print("\n");
+      // print("c0      : "); print(c0{}); print("\n");
+      // print("c1      : "); print(c1{}); print("\n");
+      // print("c2      : "); print(c2{}); print("\n");
+      // print("c3      : "); print(c3{}); print("\n");
+      // print("c4      : "); print(c4{}); print("\n");
     }
 #endif
 
