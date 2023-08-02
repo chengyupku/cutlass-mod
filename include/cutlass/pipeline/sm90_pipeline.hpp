@@ -196,6 +196,7 @@ public :
   using ClusterShape = ClusterShape_;
   using FullBarrier = cutlass::arch::ClusterTransactionBarrier;
   using EmptyBarrier = cutlass::arch::ClusterBarrier;
+  using SignalBarrier = cutlass::arch::ClusterBarrier;
   using ProducerBarrierType = FullBarrier::ValueType;
   using ConsumerBarrierType = EmptyBarrier::ValueType;
   static constexpr uint32_t Stages = Stages_;
@@ -203,6 +204,8 @@ public :
   struct SharedStorage {
     FullBarrier full_barrier_[Stages];
     EmptyBarrier empty_barrier_[Stages];
+    SignalBarrier signal_A_barrier_;
+    SignalBarrier signal_B_barrier_;
   };
 
   enum class ThreadCategory {
@@ -224,7 +227,9 @@ public :
   PipelineTmaAsync(SharedStorage& storage, Params params)
       : params_(params)
       , full_barrier_ptr_(&storage.full_barrier_[0])
-      , empty_barrier_ptr_(&storage.empty_barrier_[0]) {
+      , empty_barrier_ptr_(&storage.empty_barrier_[0]) 
+      , signal_A_barrier_ptr_(&storage.signal_A_barrier_)
+      , signal_B_barrier_ptr_(&storage.signal_B_barrier_) {
 
     int warp_idx = canonical_warp_idx();
     int lane_predicate = cute::elect_one_sync();
@@ -242,6 +247,9 @@ public :
       for (int i = 0; i < Stages; ++i) {
         empty_barrier_ptr_[i].init(multicast_consumer_arrival_count);
       }
+      // Barrier SIGNAL init
+      signal_A_barrier_ptr_[0].init(1);
+      signal_B_barrier_ptr_[0].init(1);
     }
 
     // Logic to optimally schedule Empty Arrives
@@ -320,6 +328,26 @@ public :
   }
 
   CUTLASS_DEVICE
+  void signal_A_arrive(uint32_t dst_block_id) {
+    signal_A_barrier_ptr_[0].arrive(dst_block_id);
+  }
+  
+  CUTLASS_DEVICE
+  void signal_A_acquire(uint32_t phase) {
+    signal_A_barrier_ptr_[0].wait(phase);
+  }
+  
+  CUTLASS_DEVICE
+  void signal_B_arrive(uint32_t dst_block_id) {
+    signal_B_barrier_ptr_[0].arrive(dst_block_id);
+  }
+  
+  CUTLASS_DEVICE
+  void signal_B_acquire(uint32_t phase) {
+    signal_B_barrier_ptr_[0].wait(phase);
+  }
+
+  CUTLASS_DEVICE
   void producer_commit(PipelineState<Stages> state, uint32_t bytes) {
     producer_commit(state.index(), bytes);
   }
@@ -358,6 +386,14 @@ public :
   }
 
   CUTLASS_DEVICE
+  void consumer_wait_detail(uint32_t stage, uint32_t phase) {
+    uint32_t done = full_barrier_ptr_[stage].test_wait(phase);
+    if (not done) {
+      full_barrier_ptr_[stage].wait(phase);
+    }
+  }
+
+  CUTLASS_DEVICE
   void consumer_release(PipelineState<Stages> state) {
     consumer_release(state.index());
   }
@@ -367,6 +403,8 @@ private :
   uint32_t is_signalling_thread_ = 0;
   FullBarrier *full_barrier_ptr_ = nullptr;
   EmptyBarrier *empty_barrier_ptr_ = nullptr;
+  SignalBarrier *signal_A_barrier_ptr_ = nullptr;
+  SignalBarrier *signal_B_barrier_ptr_ = nullptr;
   Params params_;
 
   CUTLASS_DEVICE

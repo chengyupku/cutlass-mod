@@ -60,7 +60,9 @@ class GemmUniversal<
   CollectiveMainloop_,
   CollectiveEpilogue_,
   GridSwizzle_,
-  cute::enable_if_t<cute::is_base_of_v<KernelTmaWarpSpecializedCooperative, typename CollectiveMainloop_::DispatchPolicy::Schedule>>>
+  cute::enable_if_t<
+    (cute::is_base_of_v<KernelTmaWarpSpecializedCooperative, typename CollectiveMainloop_::DispatchPolicy::Schedule> ||
+     cute::is_base_of_v<KernelTmaWarpSpecializedCooperativeDSMEM, typename CollectiveMainloop_::DispatchPolicy::Schedule>)>>
 {
 public:
   //
@@ -336,6 +338,7 @@ public:
     PipelineState mainloop_pipe_producer_state = cutlass::make_producer_start_state<MainloopPipeline>();
     PipelineState epi_load_pipe_producer_state = cutlass::make_producer_start_state<EpiLoadPipeline>();
     PipelineState epi_store_pipe_producer_state = cutlass::make_producer_start_state<EpiStorePipeline>();
+    int signal_phase = 0;
 
     auto cluster_wait_fn = [&] () {
       // We need this to guarantee that the Pipeline init is visible
@@ -409,6 +412,7 @@ public:
           gB, params.mainloop.tma_load_b,
           k_tile_iter, k_tile_count,
           thread_idx,
+          signal_phase,
           shared_storage.tensors.mainloop
         );
         // Update starting pipeline state for the next tile

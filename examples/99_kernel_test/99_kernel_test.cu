@@ -125,7 +125,7 @@ using CollectiveMainloop = typename cutlass::gemm::collective::CollectiveBuilder
     TileShape, ClusterShape,
     cutlass::gemm::collective::StageCountAutoCarveout<
       sizeof(typename CollectiveEpilogue::SharedStorage)>,
-    cutlass::gemm::KernelTmaWarpSpecializedCooperative
+    cutlass::gemm::KernelTmaWarpSpecializedCooperativeDSMEM
   >::CollectiveOp;
 
 using GemmKernel = cutlass::gemm::kernel::GemmUniversal<

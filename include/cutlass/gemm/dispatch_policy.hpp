@@ -50,6 +50,7 @@ struct KernelTma { };
 struct KernelTmaWarpSpecialized { };
 struct KernelTmaWarpSpecializedPingpong { };
 struct KernelTmaWarpSpecializedCooperative { };
+struct KernelTmaWarpSpecializedCooperativeDSMEM { };
 
 // Policies for dispatch of epilogue
 struct EpilogueDefault { };
@@ -138,6 +139,18 @@ template<
   class KernelSchedule = KernelTmaWarpSpecializedCooperative
 >
 struct MainloopSm90TmaGmmaWarpSpecialized {
+  constexpr static int Stages = Stages_;
+  using ClusterShape = ClusterShape_;
+  using ArchTag = arch::Sm90;
+  using Schedule = KernelSchedule;
+};
+
+template<
+  int Stages_,
+  class ClusterShape_ = Shape<_1,_1,_1>,
+  class KernelSchedule = KernelTmaWarpSpecializedCooperativeDSMEM
+>
+struct MainloopSm90TmaGmmaWarpSpecializedDSMEM {
   constexpr static int Stages = Stages_;
   using ClusterShape = ClusterShape_;
   using ArchTag = arch::Sm90;

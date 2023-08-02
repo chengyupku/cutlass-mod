@@ -841,14 +841,15 @@ local_tile(Tensor     && tensor,
 //
 
 template <class Engine, class Layout>
-CUTE_HOST_DEVICE void print_tensor(Tensor<Engine,Layout> const& tensor)
+CUTE_HOST_DEVICE void print_tensor(Tensor<Engine,Layout> const& tensor, int part=0)
 {
   auto format = get_format(tensor(0));
   using type = typename decltype(format)::type;
 
   if constexpr (Layout::rank == 1)
   {
-    for (int m = 0; m < size(tensor); ++m) {
+    int print_part = part == 0 ? size(tensor) : part;
+    for (int m = 0; m < print_part; ++m) {
       printf(format.format, format.digits, type(tensor(m)));
       printf("\n");
     }

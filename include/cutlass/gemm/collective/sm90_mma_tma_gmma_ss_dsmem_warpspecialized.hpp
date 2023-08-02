@@ -69,7 +69,7 @@ template <
   class SmemCopyAtomB_,
   class TransformB_>
 struct CollectiveMma<
-    MainloopSm90TmaGmmaWarpSpecialized<Stages, ClusterShape, KernelSchedule>,
+    MainloopSm90TmaGmmaWarpSpecializedDSMEM<Stages, ClusterShape, KernelSchedule>,
     TileShape_,
     ElementA_,
     StrideA_,
@@ -88,7 +88,7 @@ struct CollectiveMma<
   //
   // Type Aliases
   //
-  using DispatchPolicy = MainloopSm90TmaGmmaWarpSpecialized<Stages, ClusterShape, KernelSchedule>;
+  using DispatchPolicy = MainloopSm90TmaGmmaWarpSpecializedDSMEM<Stages, ClusterShape, KernelSchedule>;
   using TileShape = TileShape_;
   using ElementA = ElementA_;
   using StrideA = StrideA_;
@@ -175,16 +175,12 @@ struct CollectiveMma<
     using TMA_A = decltype(make_tma_copy(
         GmemTiledCopyA{},
         make_tensor(static_cast<InternalElementA const*>(nullptr), repeat_like(StrideA{}, int32_t(0)), StrideA{}),
-        SmemLayoutA{}(_,_,0),
-        make_shape(shape<0>(TileShape{}), shape<2>(TileShape{})),
-        size<1>(ClusterShape{})));  // mcast along N mode for this M load, if any
+        SmemLayoutA{}(_,_,0)));  // force no mcast
     // Assumption: StrideB is congruent with Problem_NK
     using TMA_B = decltype(make_tma_copy(
         GmemTiledCopyB{},
         make_tensor(static_cast<InternalElementB const*>(nullptr), repeat_like(StrideB{}, int32_t(0)), StrideB{}),
-        SmemLayoutB{}(_,_,0),
-        make_shape(shape<1>(TileShape{}), shape<2>(TileShape{})),
-        size<0>(ClusterShape{}))); // mcast along M mode for this N load, if any
+        SmemLayoutB{}(_,_,0))); // force no mcast
     TMA_A tma_load_a;
     TMA_B tma_load_b;
   };
@@ -213,15 +209,11 @@ struct CollectiveMma<
     typename Params::TMA_A tma_load_a = make_tma_copy(
         GmemTiledCopyA{},
         tensor_a,
-        SmemLayoutA{}(_,_,cute::Int<0>{}),
-        make_shape(shape<0>(TileShape{}), shape<2>(TileShape{})),
-        size<1>(ClusterShape{})); // mcast along N mode for this M load, if any
+        SmemLayoutA{}(_,_,cute::Int<0>{})); // force no mcast
     typename Params::TMA_B tma_load_b = make_tma_copy(
         GmemTiledCopyB{},
         tensor_b,
-        SmemLayoutB{}(_,_,cute::Int<0>{}),
-        make_shape(shape<1>(TileShape{}), shape<2>(TileShape{})),
-        size<0>(ClusterShape{})); // mcast along M mode for this N load, if any
+        SmemLayoutB{}(_,_,cute::Int<0>{})); // force no mcast
     return {
       tma_load_a,
       tma_load_b
@@ -257,6 +249,7 @@ struct CollectiveMma<
       TensorB const& gB, TMA_LOAD_B& tma_load_b,
       KTileIterator k_tile_iter, int k_tile_count,
       int thread_idx,
+      int& signal_phase,
       TensorStorage& shared_tensors)
   {
 
@@ -284,6 +277,20 @@ struct CollectiveMma<
       Tensor tBgB = block_tma_b.partition_S(gB);                                                 // (TMA,TMA_N,TMA_K,k)
       Tensor tBsB = block_tma_b.partition_D(sB);                                              // (TMA,TMA_N,TMA_K,PIPE)
 
+#if 0
+    static int iter = 0;
+    if (threadIdx.x==0 && iter == 0 && blockIdx.x==0
+                                    && blockIdx.y==0
+                                    && blockIdx.z==0)
+    {
+      iter += 1;
+      print("tAgA: "); print(tAgA.layout()); print("\n");
+      print("tAsA: "); print(tAsA.layout()); print("\n");
+      print("tBgB: "); print(tBgB.layout()); print("\n");
+      print("tBsB: "); print(tBsB.layout()); print("\n");
+    }
+#endif
+
       uint16_t mcast_mask_a = 0;
       uint16_t mcast_mask_b = 0;
 
@@ -303,12 +310,26 @@ struct CollectiveMma<
         }
       }
 
+      int k_iter = 0;
+      assert(k_tile_count % size<0>(ClusterShape{}) == 0 && k_tile_count % size<1>(ClusterShape{}) == 0; "cluster shape not aligned!");
+      
       // Mainloop
       CUTLASS_PRAGMA_NO_UNROLL
       for ( ; k_tile_count > 0; --k_tile_count)
       {
         // LOCK smem_pipe_write for _writing_
         pipeline.producer_acquire(smem_pipe_write);
+
+        // SIGNAL to src block that the current block is ready to write in the Stage
+        // after producer_acquire() returns
+        uint32_t src_A_block = cluster_local_block_id.y == 0 ?
+                                size<1>(ClusterShape{}) - 1 :
+                                cluster_local_block_id.y - 1;
+        uint32_t src_B_block = cluster_local_block_id.x == 0 ?
+                                size<0>(ClusterShape{}) - 1 :
+                                cluster_local_block_id.x - 1; 
+        pipeline.signal_A_arrive(src_A_block);
+        pipeline.signal_B_arrive(src_B_block);
 
         //
         // Copy gmem to smem for *k_tile_iter
@@ -318,9 +339,79 @@ struct CollectiveMma<
         BarrierType* tma_barrier = pipeline.producer_get_barrier(smem_pipe_write);
 
         int write_stage = smem_pipe_write.index();
-        copy(tma_load_a.with(*tma_barrier, mcast_mask_a), tAgA(_,_,_,*k_tile_iter), tAsA(_,_,_,write_stage));
-        copy(tma_load_b.with(*tma_barrier, mcast_mask_b), tBgB(_,_,_,*k_tile_iter), tBsB(_,_,_,write_stage));
+        
+        // TMA load A from gmem to smem
+        if (k_iter % size<1>(ClusterShape{}) == 0)
+        {
+          int k_tile_iter_A = k_iter + (cluster_local_block_id.x + cluster_local_block_id.y) % size<1>(ClusterShape{});
+          copy(tma_load_a.with(*tma_barrier, mcast_mask_a), tAgA(_,_,_,k_tile_iter_A), tAsA(_,_,_,write_stage));
+        }
+        // DSMEM copy A
+        else
+        {
+          pipeline.signal_A_acquire(signal_phase);  // signal_phase may have bug
+
+          uint32_t transaction_bytes = shape<0>(TileShape{}) * shape<2>(TileShape{}) * sizeof(InternalElementA);
+
+          int tmp_phase;
+          int tmp_stage;
+          if (k_iter)
+          {
+            tmp_phase = smem_pipe_write.index() == 0 ? smem_pipe_write.phase() : smem_pipe_write.phase()^1;
+            tmp_stage = (smem_pipe_write.index() + K_PIPE_MAX - 1) % K_PIPE_MAX;
+            pipeline.consumer_wait_detail(tmp_stage, tmp_phase);
+          }
+#if 0
+    if (threadIdx.x==0              && blockIdx.x==0
+                                    && blockIdx.y==0
+                                    && blockIdx.z==0)
+    {
+      print("smem_pipe_write: %d\n", smem_pipe_write.index());
+    }
+#endif
+          dsmem_copy( ClusterShape{}, 
+                      cluster_local_block_id,  
+                      tAsA(_,_,_,tmp_stage).data().get(), 
+                      tAsA(_,_,_,write_stage).data().get(), 
+                      tma_barrier, 
+                      transaction_bytes,
+                      0);
+        }
+
+        // TMA load B from gmem to smem
+        if (k_iter % size<0>(ClusterShape{}) == 0)
+        {
+          int k_tile_iter_B = k_iter + (cluster_local_block_id.x + cluster_local_block_id.y) % size<0>(ClusterShape{});
+          copy(tma_load_b.with(*tma_barrier, mcast_mask_b), tBgB(_,_,_,k_tile_iter_B), tBsB(_,_,_,write_stage));
+        }
+        // DSMEM copy B
+        else
+        {
+          pipeline.signal_B_acquire(signal_phase); // signal_phase may have bug
+
+          uint32_t transaction_bytes = shape<1>(TileShape{}) * shape<2>(TileShape{}) * sizeof(InternalElementB);
+          
+          int tmp_phase;
+          int tmp_stage;
+          if (k_iter)
+          {
+            tmp_phase = smem_pipe_write.index() == 0 ? smem_pipe_write.phase() : smem_pipe_write.phase()^1;
+            tmp_stage = (smem_pipe_write.index() + K_PIPE_MAX - 1) % K_PIPE_MAX;
+            pipeline.consumer_wait_detail(tmp_stage, tmp_phase);
+          }
+          
+          dsmem_copy( ClusterShape{}, 
+                      cluster_local_block_id,  
+                      tBsB(_,_,_,tmp_stage).data().get(), 
+                      tBsB(_,_,_,write_stage).data().get(), 
+                      tma_barrier, 
+                      transaction_bytes,
+                      1);
+        }
+        
         ++k_tile_iter;
+        ++k_iter;
+        signal_phase ^= 1;
 
         // Advance smem_pipe_write
         ++smem_pipe_write;
@@ -467,7 +558,14 @@ struct CollectiveMma<
     {
       // WAIT on smem_pipe_read until its data are available (phase bit flips from rdPhaseBit value)
       pipeline.consumer_wait(smem_pipe_read);
-
+#if 0
+    if (threadIdx.x==128              && blockIdx.x==0
+                                    && blockIdx.y==0
+                                    && blockIdx.z==0)
+    {
+      print("33333333333 %d\n", smem_pipe_read.index());
+    }
+#endif
       //
       // Compute on k_tile
       //
