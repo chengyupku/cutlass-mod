@@ -377,6 +377,16 @@ public :
   // Prevents early exit of producer blocks in Cluster.
   // This should be called once before kernel exits.
   CUTLASS_DEVICE
+  void producer_tail(PipelineState<Stages> state) {
+    for (int count = 0; count < Stages; ++count) {
+      producer_acquire(state);  
+      ++state;
+    }
+  }
+
+  // Prevents early exit of producer blocks in Cluster.
+  // This should be called once before kernel exits.
+  CUTLASS_DEVICE
   void producer_tail(PipelineState<Stages> state, 
                     int& receiver_ready_phase,
                     int dsmem_copy_stage) {

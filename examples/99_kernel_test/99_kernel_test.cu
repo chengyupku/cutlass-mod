@@ -125,7 +125,7 @@ using CollectiveMainloop = typename cutlass::gemm::collective::CollectiveBuilder
     TileShape, ClusterShape,
     cutlass::gemm::collective::StageCountAutoCarveout<
       sizeof(typename CollectiveEpilogue::SharedStorage)>,
-    cutlass::gemm::KernelTmaWarpSpecializedCooperativeDSMEM
+    cutlass::gemm::KernelTmaWarpSpecializedCooperative
   >::CollectiveOp;
 
 using GemmKernel = cutlass::gemm::kernel::GemmUniversal<
@@ -188,7 +188,7 @@ struct Options {
     help(false),
     m(16384), n(16384), k(16384),
     alpha(1.f), beta(0.f),
-    iterations(1)
+    iterations(10)
   { }
 
   // Parses the command line
@@ -381,7 +381,7 @@ int run(Options &options)
   CUTLASS_CHECK(gemm.initialize(arguments, workspace.get()));
 
   // Correctness / Warmup iteration
-  // CUTLASS_CHECK(gemm.run());
+  CUTLASS_CHECK(gemm.run());
 
   // Check if output from CUTLASS kernel and reference kernel are equal or not
   Result result;
