@@ -338,7 +338,10 @@ public:
     PipelineState mainloop_pipe_producer_state = cutlass::make_producer_start_state<MainloopPipeline>();
     PipelineState epi_load_pipe_producer_state = cutlass::make_producer_start_state<EpiLoadPipeline>();
     PipelineState epi_store_pipe_producer_state = cutlass::make_producer_start_state<EpiStorePipeline>();
-    int signal_phase = 0;
+    int receiver_ready_phase = 1;
+    int sender_ready_phase = 0;
+    int sender_dsmem_copy_finish_phase = 1;
+    int receiver_dsmem_copy_finish_phase = 0;
 
     auto cluster_wait_fn = [&] () {
       // We need this to guarantee that the Pipeline init is visible
@@ -369,6 +372,7 @@ public:
     // Get the appropriate blocks for this thread block -- potential for thread block locality
     TiledMma tiled_mma;
     auto blk_shape = TileShape{};                                                                // (BLK_M,BLK_N,BLK_K)
+    auto stage_num = DispatchPolicy::Stages;
 
     // Make tiled views, defer the slice
     Tensor gA_mkl = local_tile(mA_mkl, blk_shape, make_coord(_,_,_), Step<_1, X,_1>{});          // (BLK_M,BLK_K,m,k,l)
@@ -389,6 +393,7 @@ public:
     // Wait for all thread blocks in the Cluster
     cluster_wait_fn();
 
+    // int iter = 0;
     if (warp_group_role == WarpGroupRole::Producer) {
       cutlass::arch::warpgroup_reg_dealloc<LoadRegisterRequirement>();
 
@@ -412,7 +417,10 @@ public:
           gB, params.mainloop.tma_load_b,
           k_tile_iter, k_tile_count,
           thread_idx,
-          signal_phase,
+          receiver_ready_phase,
+          sender_ready_phase,
+          sender_dsmem_copy_finish_phase,
+          receiver_dsmem_copy_finish_phase,
           shared_storage.tensors.mainloop
         );
         // Update starting pipeline state for the next tile
@@ -449,13 +457,33 @@ public:
           print("\n");
         }
 #endif
+#if 0
+        if (threadIdx.x==0)
+        {
+          print("(%d, %d, %d): loop finish \n", blockIdx.x, blockIdx.y, blockIdx.z);
+        }
+#endif
       } // Scheduler work fetch loop
-
+#if 0
+      if (threadIdx.x==0)
+      {
+        print("(%d, %d, %d): load finish \n", blockIdx.x, blockIdx.y, blockIdx.z);
+      }
+#endif
       // Make sure all Consumer Warp Groups have been waited upon
-      collective_mainloop.load_tail(mainloop_pipeline, mainloop_pipe_producer_state);
+      collective_mainloop.load_tail(mainloop_pipeline, 
+                                    mainloop_pipe_producer_state, 
+                                    receiver_ready_phase,
+                                    stage_num - 1);
       if (collective_epilogue.is_source_needed()) {
         collective_epilogue.load_tail(epi_load_pipeline, epi_load_pipe_producer_state);
       }
+#if 0
+      if (threadIdx.x==0)
+      {
+        print("(%d, %d, %d): producer finish \n", blockIdx.x, blockIdx.y, blockIdx.z);
+      }
+#endif
     } // Producer Warp Group End
 
     else if (warp_group_role == WarpGroupRole::Consumer0 || warp_group_role == WarpGroupRole::Consumer1) {
@@ -485,7 +513,8 @@ public:
         collective_mainloop.mma_tail(
           mainloop_pipeline,
           mainloop_pipe_consumer_state,
-          k_tile_count
+          k_tile_count,
+          stage_num - 1
         );
         // Update starting mainloop pipeline state for the next tile
         mainloop_pipe_consumer_state.advance(k_tile_count);
@@ -512,6 +541,12 @@ public:
         scheduler.advance_to_next_work();
         work_tile_info = scheduler.get_current_work(params.scheduler);
       } // Scheduler work fetch loop
+#if 0
+      if (threadIdx.x==128)
+      {
+        print("(%d, %d, %d): consumer finish \n", blockIdx.x, blockIdx.y, blockIdx.z);
+      }
+#endif
     } // Consumer Warp Groups End
   }
 };
