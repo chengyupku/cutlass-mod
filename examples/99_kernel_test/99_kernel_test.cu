@@ -125,7 +125,7 @@ using CollectiveMainloop = typename cutlass::gemm::collective::CollectiveBuilder
     TileShape, ClusterShape,
     cutlass::gemm::collective::StageCountAutoCarveout<
       sizeof(typename CollectiveEpilogue::SharedStorage)>,
-    cutlass::gemm::KernelTmaWarpSpecializedCooperative
+    cutlass::gemm::KernelTmaWarpSpecializedCooperativeDSMEM
   >::CollectiveOp;
 
 using GemmKernel = cutlass::gemm::kernel::GemmUniversal<
@@ -137,15 +137,15 @@ using GemmKernel = cutlass::gemm::kernel::GemmUniversal<
 using Gemm = cutlass::gemm::device::GemmUniversalAdapter<GemmKernel>;
 
 // Reference device GEMM implementation type
-// using DeviceGemmReference = cutlass::reference::device::Gemm<
-//   ElementA,
-//   LayoutA,
-//   ElementB,
-//   LayoutB,
-//   ElementC,
-//   LayoutC,
-//   ElementAccumulator,
-//   ElementAccumulator>;
+using DeviceGemmReference = cutlass::reference::device::Gemm<
+  ElementA,
+  LayoutA,
+  ElementB,
+  LayoutB,
+  ElementC,
+  LayoutC,
+  ElementAccumulator,
+  ElementAccumulator>;
 
 using StrideA = typename Gemm::GemmKernel::StrideA;
 using StrideB = typename Gemm::GemmKernel::StrideB;
@@ -167,7 +167,7 @@ cutlass::DeviceAllocation<typename Gemm::ElementA> block_A;
 cutlass::DeviceAllocation<typename Gemm::ElementB> block_B;
 cutlass::DeviceAllocation<typename cutlass::half_t> block_C;
 cutlass::DeviceAllocation<typename Gemm::EpilogueOutputOp::ElementOutput> block_D;
-// cutlass::DeviceAllocation<typename Gemm::EpilogueOutputOp::ElementOutput> block_ref_D;
+cutlass::DeviceAllocation<typename Gemm::EpilogueOutputOp::ElementOutput> block_ref_D;
 
 #endif // defined(CUTLASS_ARCH_MMA_SM90_SUPPORTED)
 
@@ -285,8 +285,8 @@ bool initialize_block(
     scope_min = -8;
   }
 
-  // cutlass::reference::device::BlockFillRandomUniform(
-  //   block.get(), block.size(), seed, scope_max, scope_min, 0);
+  cutlass::reference::device::BlockFillRandomUniform(
+    block.get(), block.size(), seed, scope_max, scope_min, 0);
 
   return true;
 }
@@ -303,11 +303,11 @@ void initialize(const Options &options) {
   block_B.reset(options.k * options.n);
   block_C.reset(options.m * options.n);
   block_D.reset(options.m * options.n);
-  // block_ref_D.reset(options.m * options.n);
+  block_ref_D.reset(options.m * options.n);
 
-  // initialize_block(block_A, seed + 2023);
-  // initialize_block(block_B, seed + 2022);
-  // initialize_block(block_C, seed + 2021);
+  initialize_block(block_A, seed + 2023);
+  initialize_block(block_B, seed + 2022);
+  initialize_block(block_C, seed + 2021);
 }
 
 /// Populates a Gemm::Arguments structure from the given commandline options
@@ -323,38 +323,38 @@ typename Gemm::Arguments args_from_options(const Options &options)
   return arguments;
 }
 
-// bool verify(const Options &options) {
-//   cutlass::TensorRef ref_A(block_A.get(), Gemm::LayoutA::packed({options.m, options.k}));
-//   cutlass::TensorRef ref_B(block_B.get(), Gemm::LayoutB::packed({options.n, options.k}));
-//   cutlass::TensorRef ref_C(block_C.get(), Gemm::LayoutC::packed({options.m, options.n}));
-//   cutlass::TensorRef ref_D(block_ref_D.get(), Gemm::LayoutD::packed({options.m, options.n}));
+bool verify(const Options &options) {
+  cutlass::TensorRef ref_A(block_A.get(), Gemm::LayoutA::packed({options.m, options.k}));
+  cutlass::TensorRef ref_B(block_B.get(), Gemm::LayoutB::packed({options.n, options.k}));
+  cutlass::TensorRef ref_C(block_C.get(), Gemm::LayoutC::packed({options.m, options.n}));
+  cutlass::TensorRef ref_D(block_ref_D.get(), Gemm::LayoutD::packed({options.m, options.n}));
 
-//   //
-//   // Compute reference output
-//   //
+  //
+  // Compute reference output
+  //
 
-//   // Create instantiation for device reference gemm kernel
-//   DeviceGemmReference gemm_reference;
+  // Create instantiation for device reference gemm kernel
+  DeviceGemmReference gemm_reference;
 
-//   // Launch device reference gemm kernel
-//   gemm_reference(
-//     {options.m, options.n, options.k},
-//     ElementAccumulator(options.alpha),
-//     ref_A,
-//     ref_B,
-//     ElementAccumulator(options.beta),
-//     ref_C,
-//     ref_D);
+  // Launch device reference gemm kernel
+  gemm_reference(
+    {options.m, options.n, options.k},
+    ElementAccumulator(options.alpha),
+    ref_A,
+    ref_B,
+    ElementAccumulator(options.beta),
+    ref_C,
+    ref_D);
 
-//   // Wait for kernel to finish
-//   CUDA_CHECK(cudaDeviceSynchronize());
+  // Wait for kernel to finish
+  CUDA_CHECK(cudaDeviceSynchronize());
 
-//   // Check if output from CUTLASS kernel and reference kernel are equal or not
-//   bool passed = cutlass::reference::device::BlockCompareEqual(block_ref_D.get(), block_D.get(), block_D.size());
+  // Check if output from CUTLASS kernel and reference kernel are equal or not
+  bool passed = cutlass::reference::device::BlockCompareEqual(block_ref_D.get(), block_D.get(), block_D.size());
 
-//   return passed;
-//   // return true;
-// }
+  return passed;
+  // return true;
+}
 
 /// Execute a given example GEMM computation
 template <typename Gemm>
@@ -385,7 +385,7 @@ int run(Options &options)
 
   // Check if output from CUTLASS kernel and reference kernel are equal or not
   Result result;
-  result.passed = true;
+  result.passed = verify(options);
 
   std::cout << "  Disposition: " << (result.passed ? "Passed" : "Failed") << std::endl;
 

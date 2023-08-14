@@ -293,6 +293,7 @@ public:
     int mma_thread_idx = thread_idx % size(TiledMma{});
     auto warp_group_role = WarpGroupRole(canonical_warp_group_idx());
     int lane_predicate = cute::elect_one_sync();
+    auto stage_num = DispatchPolicy::Stages;
 
     // Issue Tma Descriptor Prefetch from a single thread
     if ((warp_idx == 0) && lane_predicate) {
@@ -312,6 +313,13 @@ public:
     mainloop_pipeline_params.is_leader = warp_group_thread_idx == 0;
     mainloop_pipeline_params.num_consumers = size(TiledMma{});
     mainloop_pipeline_params.transaction_bytes = CollectiveMainloop::TmaTransactionBytes;
+    mainloop_pipeline_params.use_dsmem_copy = 1;
+    mainloop_pipeline_params.dsmem_copy_A = 1;
+    mainloop_pipeline_params.dsmem_copy_B = 0;
+    mainloop_pipeline_params.dsmem_A_transaction_bytes = CollectiveMainloop::TransactionBytesA;
+    mainloop_pipeline_params.dsmem_B_transaction_bytes = CollectiveMainloop::TransactionBytesB;
+    mainloop_pipeline_params.dsmem_send_stage = 0;
+    mainloop_pipeline_params.dsmem_recv_stage = stage_num - 1;
     MainloopPipeline mainloop_pipeline(shared_storage.pipelines.mainloop, mainloop_pipeline_params);
 
     // Epilogue Load pipeline
@@ -379,7 +387,6 @@ public:
     // Get the appropriate blocks for this thread block -- potential for thread block locality
     TiledMma tiled_mma;
     auto blk_shape = TileShape{};                                                                // (BLK_M,BLK_N,BLK_K)
-    auto stage_num = DispatchPolicy::Stages;
 
     // Make tiled views, defer the slice
     Tensor gA_mkl = local_tile(mA_mkl, blk_shape, make_coord(_,_,_), Step<_1, X,_1>{});          // (BLK_M,BLK_K,m,k,l)
