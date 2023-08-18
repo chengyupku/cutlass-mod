@@ -160,4 +160,20 @@ block0()
   return block(0);
 }
 
+#define PRINT_CONDITION(tid) (threadIdx.x == tid && blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0)
+
+CUTLASS_DEVICE
+uint64_t 
+get_clock()
+{
+  uint64_t gpu_clock;
+  asm volatile (
+      // bar may have bug
+      // "bar.sync 0;\n"
+      "mov.u64 %0, %%clock64;\n"
+      : "=l"(gpu_clock) : : "memory"
+  );
+  return gpu_clock;
+}
+
 }  // end namespace cute

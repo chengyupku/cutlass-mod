@@ -125,7 +125,33 @@ public:
     scheduler_params.divmod_blk_m_(block_idx_n, block_idx_m, blk_per_grid_dim);
     int32_t work_idx_m = static_cast<int32_t>(block_idx_m);
     int32_t work_idx_n = static_cast<int32_t>((block_idx_n * gridDim.y) + blockIdx.y);
-
+#if 0
+  static int iter = 0;
+  if (threadIdx.x==0 && blockIdx.x==5 && blockIdx.y==1 && blockIdx.z==0)
+  {
+    iter += 1;
+    // print("divmod_batch_ :%d, %d, %d, %d\n",  scheduler_params.divmod_batch_.divisor,
+    //                                           scheduler_params.divmod_batch_.multiplier,
+    //                                           scheduler_params.divmod_batch_.shift_right,
+    //                                           scheduler_params.divmod_batch_.round_up);
+    // print("divmod_grid_y_ :%d, %d, %d, %d\n", scheduler_params.divmod_grid_y_.divisor,
+    //                                           scheduler_params.divmod_grid_y_.multiplier,
+    //                                           scheduler_params.divmod_grid_y_.shift_right,
+    //                                           scheduler_params.divmod_grid_y_.round_up);
+    // print("divmod_blk_m_ :%d, %d, %d, %d\n",  scheduler_params.divmod_blk_m_.divisor,
+    //                                           scheduler_params.divmod_blk_m_.multiplier,
+    //                                           scheduler_params.divmod_blk_m_.shift_right,
+    //                                           scheduler_params.divmod_blk_m_.round_up);
+    print("work_idx_m :%d\n",  work_idx_m);
+    print("work_idx_n :%d\n",  work_idx_n);
+    // print("work_idx_l :%d\n",  work_idx_l);
+    // print("block_idx_n :%llu\n",  block_idx_n);
+    // print("block_idx_m :%llu\n",  block_idx_m);
+    // print("blk_per_grid_dim :%llu\n",  blk_per_grid_dim);
+    // print("current_work_linear_idx_ :%llu\n",  current_work_linear_idx_);
+    // print("gridDim.x:%d, gridDim.y:%d, gridDim.z:%d\n", gridDim.x, gridDim.y, gridDim.z);
+  }
+#endif
     return {work_idx_m, work_idx_n, static_cast<int32_t>(work_idx_l), current_work_linear_idx_ < scheduler_params.blocks_per_problem_};
   }
 
@@ -196,6 +222,11 @@ public:
           blk_per_device       / size<1>(cluster_shape),
           problem_blocks_total / size<1>(cluster_shape));
     }
+#if 0
+    // Threadblock Rasterization
+    launch_grid.x = 66;
+    launch_grid.y = 2;
+#endif
     return launch_grid;
   }
 };

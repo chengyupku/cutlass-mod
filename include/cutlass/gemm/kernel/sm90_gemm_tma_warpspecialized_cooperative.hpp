@@ -183,6 +183,7 @@ public:
       CollectiveMainloop::to_underlying_arguments(args.problem_shape, args.mainloop, workspace),
       CollectiveEpilogue::to_underlying_arguments(args.problem_shape, args.epilogue, workspace),
       {args.hw_info.device_id, sm_count},
+      // modify ClusterShape{} to do Threadblock Rasterization
       detail::PersistentTileSchedulerSm90::to_underlying_arguments(problem_shape_MNKL, TileShape{}, ClusterShape{})
     };
   }
