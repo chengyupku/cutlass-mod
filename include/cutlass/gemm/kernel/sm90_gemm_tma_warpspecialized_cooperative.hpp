@@ -185,6 +185,7 @@ public:
       {args.hw_info.device_id, sm_count},
       // modify ClusterShape{} to do Threadblock Rasterization
       detail::PersistentTileSchedulerSm90::to_underlying_arguments(problem_shape_MNKL, TileShape{}, ClusterShape{})
+      // detail::PersistentTileSchedulerSm90::to_underlying_arguments(problem_shape_MNKL, TileShape{}, Shape<_1,_1,_1>{})
     };
   }
 
