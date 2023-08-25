@@ -785,23 +785,19 @@ private :
 
   CUTLASS_DEVICE
   void producer_acquire(uint32_t stage, uint32_t phase, ProducerToken barrier_token) {
-    if (barrier_token == BarrierStatus::WaitAgain) {
+    if (stage != params_.dsmem_recv_stage && barrier_token == BarrierStatus::WaitAgain) {
       empty_barrier_ptr_[stage].wait(phase);
     }
 
     if (params_.is_leader) {
       uint32_t A_transaction_bytes = params_.A_transaction_bytes;
       uint32_t B_transaction_bytes = params_.B_transaction_bytes;
-      if (stage == params_.dsmem_recv_stage) {
-        if (params_.dsmem_copy_A) {
-          A_transaction_bytes = 0;
-        }
-        if (params_.dsmem_copy_B) {
-          B_transaction_bytes = 0;
-        }
+      if (stage != params_.dsmem_recv_stage || not params_.dsmem_copy_A) {
+        full_barrier_ptr_[0][stage].arrive_and_reset_bytes(A_transaction_bytes);
       }
-      full_barrier_ptr_[0][stage].arrive_and_reset_bytes(A_transaction_bytes);
-      full_barrier_ptr_[1][stage].arrive_and_reset_bytes(B_transaction_bytes);      
+      if (stage != params_.dsmem_recv_stage || not params_.dsmem_copy_B) {
+        full_barrier_ptr_[1][stage].arrive_and_reset_bytes(B_transaction_bytes);      
+      }
     }
     #ifndef NDEBUG
     if (params_.role == ThreadCategory::Consumer || params_.role == ThreadCategory::NonParticipant) {
@@ -871,14 +867,17 @@ private :
         }
       }
     }
-    uint32_t done;
-    done = full_barrier_ptr_[0][stage].test_wait(phase);
-    if (not done) {
-      full_barrier_ptr_[0][stage].wait(phase);
+    if (stage != params_.dsmem_recv_stage || not params_.dsmem_copy_A) {
+      uint32_t done = full_barrier_ptr_[0][stage].test_wait(phase);
+      if (not done) {
+        full_barrier_ptr_[0][stage].wait(phase);
+      }
     }
-    done = full_barrier_ptr_[1][stage].test_wait(phase);
-    if (not done) {
-      full_barrier_ptr_[1][stage].wait(phase);
+    if (stage != params_.dsmem_recv_stage || not params_.dsmem_copy_B) {
+      uint32_t done = full_barrier_ptr_[1][stage].test_wait(phase);
+      if (not done) {
+        full_barrier_ptr_[1][stage].wait(phase);
+      }
     }
   }
 

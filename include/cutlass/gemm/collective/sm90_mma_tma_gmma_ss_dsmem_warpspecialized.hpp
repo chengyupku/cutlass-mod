@@ -319,22 +319,13 @@ struct CollectiveMma<
       uint16_t mcast_mask_b = 0;
 
       int k_iter = 0;
+      int order[4] = {3, 1, 2, 0};
 
       // Mainloop
       CUTLASS_PRAGMA_NO_UNROLL
       for ( ; k_tile_count > 0; --k_tile_count)
       {
         int write_stage = smem_pipe_write.index();
-        if (write_stage == send_stage)
-        {
-          if (pipeline_params.dsmem_copy_A) {
-            pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, 0);
-          }
-          if (pipeline_params.dsmem_copy_B) {
-            pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, 1);
-          }
-          sender_dsmem_copy_finish_phase ^= 1;
-        }
 
         // LOCK smem_pipe_write for _writing_
         pipeline.producer_acquire(smem_pipe_write);
@@ -352,9 +343,20 @@ struct CollectiveMma<
           k_tile_iter_AB = k_iter;
         }
         else {
-          k_tile_iter_AB = ((k_iter / 4) + 1) * 4 - (k_iter % 4) - 1;
+          k_tile_iter_AB = (k_iter / 4) * 4 + order[k_iter % 4];
         }
 
+        // to optimize
+        if (write_stage == send_stage)
+        {
+          if (pipeline_params.dsmem_copy_A) {
+            pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, 0);
+          }
+          if (pipeline_params.dsmem_copy_B) {
+            pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, 1);
+          }
+          sender_dsmem_copy_finish_phase ^= 1;
+        }
         if (write_stage != dsmem_copy_stage || (not pipeline_params.dsmem_copy_A)) {
           // TMA load A from gmem to smem
           copy(tma_load_a.with(*tma_A_barrier, mcast_mask_a), tAgA(_,_,_,k_tile_iter_AB), tAsA(_,_,_,write_stage));
@@ -399,14 +401,16 @@ struct CollectiveMma<
       {
         // wait receiver's arrive
         if (pipeline_params.dsmem_copy_A) {
-          pipeline.sender_wait_receiver_ready(receiver_ready_phase, 0);
           // wait sender buffer ready, may have bug (double consumer wait?)
           pipeline.sender_wait_sender_ready(sender_ready_phase, 0);
+          // to optimize
+          pipeline.sender_wait_receiver_ready(receiver_ready_phase, 0);
         }
         if (pipeline_params.dsmem_copy_B) {
-          pipeline.sender_wait_receiver_ready(receiver_ready_phase, 1);
           // wait sender buffer ready, may have bug (double consumer wait?)
           pipeline.sender_wait_sender_ready(sender_ready_phase, 1);
+          // to optimize
+          pipeline.sender_wait_receiver_ready(receiver_ready_phase, 1);
         }
 
         receiver_ready_phase ^= 1;
@@ -600,9 +604,6 @@ struct CollectiveMma<
     uint64_t mma_end_clock;
     uint64_t start_clock;
     uint64_t end_clock;
-    if(PRINT_CONDITION(128)) {
-      mma_beg_clock = get_clock();
-    }
 #endif
 
     tiled_mma.accumulate_ = GMMA::ScaleOut::Zero;
@@ -626,20 +627,20 @@ struct CollectiveMma<
       print("sB, stage %d: ", smem_pipe_read.index()); print(sB(_,_,smem_pipe_read.index())); print("\n");
     }
 #endif
-#if PROFILE
-      if(PRINT_CONDITION(128) && prof_iter < PROFILE_ITER) {
-        start_clock = get_clock();
-      }
-#endif
+// #if PROFILE
+//       if(PRINT_CONDITION(128) && prof_iter < PROFILE_ITER) {
+//         start_clock = get_clock();
+//       }
+// #endif
       // WAIT on smem_pipe_read until its data are available (phase bit flips from rdPhaseBit value)
       pipeline.consumer_wait(smem_pipe_read);
-#if PROFILE
-      if(PRINT_CONDITION(128) && prof_iter < PROFILE_ITER) {
-        end_clock = get_clock();
-        print("stage %d: %llu\n", smem_pipe_read.index(), end_clock - start_clock);
-        ++prof_iter;
-      }
-#endif
+// #if PROFILE
+//       if(PRINT_CONDITION(128) && prof_iter < PROFILE_ITER) {
+//         end_clock = get_clock();
+//         print("stage %d: %llu\n", smem_pipe_read.index(), end_clock - start_clock);
+//         ++prof_iter;
+//       }
+// #endif
 
       int read_stage = smem_pipe_read.index();
       warpgroup_arrive();
@@ -663,20 +664,18 @@ struct CollectiveMma<
     CUTLASS_PRAGMA_NO_UNROLL
     for ( ; k_tile_count > 0; --k_tile_count)
     {
-#if PROFILE
-      if(PRINT_CONDITION(128) && prof_iter < PROFILE_ITER) {
-        start_clock = get_clock();
-      }
-#endif
+// #if PROFILE
+//       if(PRINT_CONDITION(128) && prof_iter < PROFILE_ITER) {
+//         mma_beg_clock = get_clock();
+//       }
+// #endif
+// #if PROFILE
+//       if(PRINT_CONDITION(128) && prof_iter < PROFILE_ITER) {
+//         start_clock = get_clock();
+//       }
+// #endif
       // WAIT on smem_pipe_read until its data are available (phase bit flips from rdPhaseBit value)
       pipeline.consumer_wait(smem_pipe_read);
-#if PROFILE
-      if(PRINT_CONDITION(128) && prof_iter < PROFILE_ITER) {
-        end_clock = get_clock();
-        print("stage %d:0: %llu\n", smem_pipe_read.index(), end_clock - start_clock);
-        start_clock = end_clock;
-      }
-#endif
 
 #if 0
     if (threadIdx.x==128 && blockIdx.x==0 && blockIdx.y==0 && blockIdx.z==0)
@@ -706,7 +705,20 @@ struct CollectiveMma<
       warpgroup_fence_operand(accum);
 
       // UNLOCK smem_pipe_release, done _computing_ on it
-      pipeline.consumer_release(smem_pipe_release);
+      if (smem_pipe_release.index() != dsmem_copy_stage) {
+        pipeline.consumer_release(smem_pipe_release);
+      }
+// #if PROFILE
+//       if(PRINT_CONDITION(128) && prof_iter < PROFILE_ITER) {
+//         end_clock = get_clock();
+//         print("read %d: %llu\n", smem_pipe_read.index(), end_clock - start_clock);
+//       }
+// #endif
+// #if PROFILE
+//           if(PRINT_CONDITION(128) && prof_iter < PROFILE_ITER) {
+//             start_clock = get_clock();
+//           }
+// #endif
       if (smem_pipe_release.index() == dsmem_copy_stage) {
         // reset & arrive on full_barrier after mma
         // but the ending may have bug
@@ -720,10 +732,22 @@ struct CollectiveMma<
           }
         }
       }
+// #if PROFILE
+//         if(PRINT_CONDITION(128) && prof_iter < PROFILE_ITER) {
+//           end_clock = get_clock();
+//           print("release:%d, %llu\n", smem_pipe_release.index(), end_clock - start_clock);
+//         }
+// #endif
 
       // Advance smem_pipe_read and smem_pipe_release
       ++smem_pipe_read;
       ++smem_pipe_release;
+// #if PROFILE
+//         if(PRINT_CONDITION(128) && prof_iter < PROFILE_ITER) {
+//           mma_end_clock = get_clock();
+//           print("loop, read:%d, release:%d, %llu\n", smem_pipe_read.index(), smem_pipe_release.index(), mma_end_clock - mma_beg_clock);
+//         }
+// #endif
     }
 
     warpgroup_fence_operand(accum);
@@ -753,7 +777,9 @@ struct CollectiveMma<
     warpgroup_wait<0>();
 
     for (int count = 0; count < prologue_mma_count; ++count) {
-      pipeline.consumer_release(smem_pipe_release);                 // UNLOCK smem_pipe_release, done _computing_ on it
+      if (smem_pipe_release.index() != dsmem_copy_stage) {
+        pipeline.consumer_release(smem_pipe_release);     // UNLOCK smem_pipe_release, done _computing_ on it
+      }
       if (smem_pipe_release.index() == dsmem_copy_stage) {
         if (threadIdx.x == 128) {
           // may have bug
