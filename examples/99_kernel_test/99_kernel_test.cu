@@ -324,36 +324,36 @@ typename Gemm::Arguments args_from_options(const Options &options)
 }
 
 bool verify(const Options &options) {
-  // cutlass::TensorRef ref_A(block_A.get(), Gemm::LayoutA::packed({options.m, options.k}));
-  // cutlass::TensorRef ref_B(block_B.get(), Gemm::LayoutB::packed({options.n, options.k}));
-  // cutlass::TensorRef ref_C(block_C.get(), Gemm::LayoutC::packed({options.m, options.n}));
-  // cutlass::TensorRef ref_D(block_ref_D.get(), Gemm::LayoutD::packed({options.m, options.n}));
+  cutlass::TensorRef ref_A(block_A.get(), Gemm::LayoutA::packed({options.m, options.k}));
+  cutlass::TensorRef ref_B(block_B.get(), Gemm::LayoutB::packed({options.n, options.k}));
+  cutlass::TensorRef ref_C(block_C.get(), Gemm::LayoutC::packed({options.m, options.n}));
+  cutlass::TensorRef ref_D(block_ref_D.get(), Gemm::LayoutD::packed({options.m, options.n}));
 
-  // //
-  // // Compute reference output
-  // //
+  //
+  // Compute reference output
+  //
 
-  // // Create instantiation for device reference gemm kernel
-  // DeviceGemmReference gemm_reference;
+  // Create instantiation for device reference gemm kernel
+  DeviceGemmReference gemm_reference;
 
-  // // Launch device reference gemm kernel
-  // gemm_reference(
-  //   {options.m, options.n, options.k},
-  //   ElementAccumulator(options.alpha),
-  //   ref_A,
-  //   ref_B,
-  //   ElementAccumulator(options.beta),
-  //   ref_C,
-  //   ref_D);
+  // Launch device reference gemm kernel
+  gemm_reference(
+    {options.m, options.n, options.k},
+    ElementAccumulator(options.alpha),
+    ref_A,
+    ref_B,
+    ElementAccumulator(options.beta),
+    ref_C,
+    ref_D);
 
-  // // Wait for kernel to finish
-  // CUDA_CHECK(cudaDeviceSynchronize());
+  // Wait for kernel to finish
+  CUDA_CHECK(cudaDeviceSynchronize());
 
-  // // Check if output from CUTLASS kernel and reference kernel are equal or not
-  // bool passed = cutlass::reference::device::BlockCompareEqual(block_ref_D.get(), block_D.get(), block_D.size());
+  // Check if output from CUTLASS kernel and reference kernel are equal or not
+  bool passed = cutlass::reference::device::BlockCompareEqual(block_ref_D.get(), block_D.get(), block_D.size());
 
-  // return passed;
-  return true;
+  return passed;
+  // return true;
 }
 
 /// Execute a given example GEMM computation

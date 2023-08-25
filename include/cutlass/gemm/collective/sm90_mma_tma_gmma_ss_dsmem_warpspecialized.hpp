@@ -109,7 +109,7 @@ struct CollectiveMma<
   using TransformB = TransformB_;
   using ArchTag = typename DispatchPolicy::ArchTag;
 
-  using MainloopPipeline = cutlass::PipelineTmaAsync<
+  using MainloopPipeline = cutlass::PipelineTmaDsmemAsync<
                              DispatchPolicy::Stages,
                              typename DispatchPolicy::ClusterShape>;
   using PipelineState = cutlass::PipelineState<DispatchPolicy::Stages>;
@@ -260,7 +260,7 @@ struct CollectiveMma<
       int& receiver_dsmem_copy_finish_phase,
       TensorStorage& shared_tensors)
   {
-    #if 0
+#if 0
     if (threadIdx.x==0 && blockIdx.x==0 && blockIdx.y==0 && blockIdx.z==0)
     {
       print("receiver_ready_phase: %d\nsender_ready_phase: %d\nsender_dsmem_copy_finish_phase: %d\nreceiver_dsmem_copy_finish_phase: %d\n", 
@@ -269,7 +269,7 @@ struct CollectiveMma<
               sender_dsmem_copy_finish_phase, 
               receiver_dsmem_copy_finish_phase);
     }
-    #endif
+#endif
     using namespace cute;
     int warp_idx = canonical_warp_idx();
     int warp_idx_in_warp_group  = warp_idx % 4;
@@ -325,9 +325,14 @@ struct CollectiveMma<
       for ( ; k_tile_count > 0; --k_tile_count)
       {
         int write_stage = smem_pipe_write.index();
-        if (write_stage == 0)
+        if (write_stage == send_stage)
         {
-          pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, 0);
+          if (pipeline_params.dsmem_copy_A) {
+            pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, 0);
+          }
+          if (pipeline_params.dsmem_copy_B) {
+            pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, 1);
+          }
           sender_dsmem_copy_finish_phase ^= 1;
         }
 
@@ -339,7 +344,8 @@ struct CollectiveMma<
         //
 
         using BarrierType = typename MainloopPipeline::ProducerBarrierType;
-        BarrierType* tma_barrier = pipeline.producer_get_barrier(smem_pipe_write);
+        BarrierType* tma_A_barrier = pipeline.producer_get_barrier(smem_pipe_write, 0);
+        BarrierType* tma_B_barrier = pipeline.producer_get_barrier(smem_pipe_write, 1);
 
         int k_tile_iter_AB;
         if (cluster_local_block_id.y == 0) {
@@ -351,11 +357,11 @@ struct CollectiveMma<
 
         if (write_stage != dsmem_copy_stage || (not pipeline_params.dsmem_copy_A)) {
           // TMA load A from gmem to smem
-          copy(tma_load_a.with(*tma_barrier, mcast_mask_a), tAgA(_,_,_,k_tile_iter_AB), tAsA(_,_,_,write_stage));
+          copy(tma_load_a.with(*tma_A_barrier, mcast_mask_a), tAgA(_,_,_,k_tile_iter_AB), tAsA(_,_,_,write_stage));
         }
         if (write_stage != dsmem_copy_stage || (not pipeline_params.dsmem_copy_B)) {
           // TMA load B from gmem to smem
-          copy(tma_load_b.with(*tma_barrier, mcast_mask_b), tBgB(_,_,_,k_tile_iter_AB), tBsB(_,_,_,write_stage));
+          copy(tma_load_b.with(*tma_B_barrier, mcast_mask_b), tBgB(_,_,_,k_tile_iter_AB), tBsB(_,_,_,write_stage));
         }
 
         ++k_tile_iter;
@@ -394,53 +400,47 @@ struct CollectiveMma<
         // wait receiver's arrive
         if (pipeline_params.dsmem_copy_A) {
           pipeline.sender_wait_receiver_ready(receiver_ready_phase, 0);
+          // wait sender buffer ready, may have bug (double consumer wait?)
+          pipeline.sender_wait_sender_ready(sender_ready_phase, 0);
         }
         if (pipeline_params.dsmem_copy_B) {
           pipeline.sender_wait_receiver_ready(receiver_ready_phase, 1);
+          // wait sender buffer ready, may have bug (double consumer wait?)
+          pipeline.sender_wait_sender_ready(sender_ready_phase, 1);
         }
 
         receiver_ready_phase ^= 1;
-        // wait sender buffer ready, may have bug (double consumer wait?)
-        pipeline.sender_wait_sender_ready(sender_ready_phase);
         sender_ready_phase ^= 1;
 
         //
         // Copy gmem to smem for *k_tile_iter
         //
         uint32_t dst_id = 0;
-        uint32_t transaction_bytes = 0;
+        using BarrierType = typename MainloopPipeline::ProducerBarrierType;
         // not support dsmem copy both A and B
         if (pipeline_params.dsmem_copy_A) {
-          transaction_bytes += TransactionBytesA;
           dst_id = (cluster_local_block_id.y + 1) % size<1>(ClusterShape{});
+          pipeline.dsmem_copy_prepare(TransactionBytesA, dst_id, 0);
+          BarrierType* dsmem_barrier = pipeline.producer_get_dsmem_barrier(0);
+          dsmem_copy( ClusterShape{}, 
+                      cluster_local_block_id,  
+                      tAsA(_,_,_,send_stage).data().get(), 
+                      tAsA(_,_,_,dsmem_copy_stage).data().get(), 
+                      dsmem_barrier, 
+                      TransactionBytesA,
+                      0);
         }
-        else if (pipeline_params.dsmem_copy_B) {
-          transaction_bytes += TransactionBytesB;
+        if (pipeline_params.dsmem_copy_B) {
           dst_id = (cluster_local_block_id.x + 1) % size<0>(ClusterShape{});
-        }
-
-        pipeline.dsmem_copy_prepare(transaction_bytes, dst_id, 0);
-
-        using BarrierType = typename MainloopPipeline::ProducerBarrierType;
-        BarrierType* dsmem_barrier = pipeline.producer_get_dsmem_barrier(0);
-
-        if (pipeline_params.dsmem_copy_A) {
+          pipeline.dsmem_copy_prepare(TransactionBytesB, dst_id, 1);
+          BarrierType* dsmem_barrier = pipeline.producer_get_dsmem_barrier(1);
           dsmem_copy( ClusterShape{}, 
-                    cluster_local_block_id,  
-                    tAsA(_,_,_,send_stage).data().get(), 
-                    tAsA(_,_,_,dsmem_copy_stage).data().get(), 
-                    dsmem_barrier, 
-                    transaction_bytes,
-                    0);
-        }
-        else if (pipeline_params.dsmem_copy_B) {
-          dsmem_copy( ClusterShape{}, 
-                    cluster_local_block_id,  
-                    tBsB(_,_,_,send_stage).data().get(), 
-                    tBsB(_,_,_,dsmem_copy_stage).data().get(), 
-                    dsmem_barrier, 
-                    transaction_bytes,
-                    1);
+                      cluster_local_block_id,  
+                      tBsB(_,_,_,send_stage).data().get(), 
+                      tBsB(_,_,_,dsmem_copy_stage).data().get(), 
+                      dsmem_barrier, 
+                      TransactionBytesB,
+                      1);
         }
         
         ++k_tile_iter;
@@ -589,6 +589,7 @@ struct CollectiveMma<
 
     // We release buffers to producer warps(dma load) with some mmas in flight
     PipelineState smem_pipe_release = smem_pipe_read;
+    auto pipeline_params = pipeline.get_params();
 
     // Prologue GMMAs
     int prologue_mma_count = min(K_PIPE_MMAS, k_tile_count);
@@ -711,7 +712,12 @@ struct CollectiveMma<
         // but the ending may have bug
         if (threadIdx.x == 128) {
           // may have bug, 2 consumer warpgroup should both arrive
-          pipeline.receiver_arrive_sender(src_A_block, 0);
+          if (pipeline_params.dsmem_copy_A) {
+            pipeline.receiver_arrive_sender(src_A_block, 0);
+          }
+          if (pipeline_params.dsmem_copy_B) {
+            pipeline.receiver_arrive_sender(src_B_block, 1);
+          }
         }
       }
 
@@ -732,6 +738,14 @@ struct CollectiveMma<
     // Prologue GMMAs
     int prologue_mma_count = min(K_PIPE_MMAS, k_tile_count);
     k_tile_count -= prologue_mma_count;
+    dim3 cluster_local_block_id = cute::block_id_in_cluster();
+    auto pipeline_params = pipeline.get_params();
+    uint32_t src_A_block = cluster_local_block_id.y == 0 ?
+                      size<1>(ClusterShape{}) - 1 :
+                      cluster_local_block_id.y - 1;
+    uint32_t src_B_block = cluster_local_block_id.x == 0 ?
+                      size<0>(ClusterShape{}) - 1 :
+                      cluster_local_block_id.x - 1; 
 
     smem_pipe_release.advance(k_tile_count);
     
@@ -743,14 +757,12 @@ struct CollectiveMma<
       if (smem_pipe_release.index() == dsmem_copy_stage) {
         if (threadIdx.x == 128) {
           // may have bug
-          dim3 cluster_local_block_id = cute::block_id_in_cluster();
-          uint32_t src_A_block = cluster_local_block_id.y == 0 ?
-                            size<1>(ClusterShape{}) - 1 :
-                            cluster_local_block_id.y - 1;
-          uint32_t src_B_block = cluster_local_block_id.x == 0 ?
-                            size<0>(ClusterShape{}) - 1 :
-                            cluster_local_block_id.x - 1; 
-          pipeline.receiver_arrive_sender(src_A_block, 0);
+          if (pipeline_params.dsmem_copy_A) {
+            pipeline.receiver_arrive_sender(src_A_block, 0);
+          }
+          if (pipeline_params.dsmem_copy_B) {
+            pipeline.receiver_arrive_sender(src_B_block, 1);
+          }
         }
       }
       ++smem_pipe_release;

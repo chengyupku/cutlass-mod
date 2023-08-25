@@ -313,11 +313,11 @@ public:
     mainloop_pipeline_params.is_leader = warp_group_thread_idx == 0;
     mainloop_pipeline_params.num_consumers = size(TiledMma{});
     mainloop_pipeline_params.transaction_bytes = CollectiveMainloop::TmaTransactionBytes;
-    mainloop_pipeline_params.use_dsmem_copy = 1;
-    mainloop_pipeline_params.dsmem_copy_A = 1;
+    mainloop_pipeline_params.use_dsmem_copy = 0;
+    mainloop_pipeline_params.dsmem_copy_A = 0;
     mainloop_pipeline_params.dsmem_copy_B = 0;
-    mainloop_pipeline_params.dsmem_A_transaction_bytes = CollectiveMainloop::TransactionBytesA;
-    mainloop_pipeline_params.dsmem_B_transaction_bytes = CollectiveMainloop::TransactionBytesB;
+    mainloop_pipeline_params.A_transaction_bytes = CollectiveMainloop::TransactionBytesA;
+    mainloop_pipeline_params.B_transaction_bytes = CollectiveMainloop::TransactionBytesB;
     mainloop_pipeline_params.dsmem_send_stage = 0;
     mainloop_pipeline_params.dsmem_recv_stage = stage_num - 1;
     MainloopPipeline mainloop_pipeline(shared_storage.pipelines.mainloop, mainloop_pipeline_params);
