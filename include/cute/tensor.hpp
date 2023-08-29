@@ -919,8 +919,7 @@ CUTE_HOST_DEVICE void print_tensor(Tensor<Engine,Layout> const& tensor)
 
   if constexpr (Layout::rank == 1)
   {
-    int print_part = part == 0 ? size(tensor) : part;
-    for (int m = 0; m < print_part; ++m) {
+    for (int m = 0; m < size(tensor); ++m) {
       printf(format.format, format.digits, type(tensor(m)));
       printf("\n");
     }
