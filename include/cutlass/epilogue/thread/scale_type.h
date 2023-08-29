@@ -45,13 +45,17 @@ namespace thread {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Specifies internal data type for computation
+/// Note :
+///  1. Scalar means alpha/beta is a single value from host(constant param) or device memory.
+///  2. Vector means alpha/beta is a vector always from device memory.
 struct ScaleType {
   enum Kind {
-    Default,           // D = alpha x (A * B) + beta x C
-    NoBetaScaling,     // D = alpha x (A * B) + C
-    OnlyAlphaScaling,  // D = alpha x (A * B)
-    OnlyAlphaPerChannelScaling, // D = alpha_vec x (A * B)
-    Nothing           // D
+    Default,                           // D = scalar_alpha x Acc + scalar_beta x C
+    NoBetaScaling,                     // D = scalar_alpha x Acc + C
+    OnlyAlphaScaling,                  // D = scalar_alpha x Acc
+    PerChannelScaling,                 // D = vector_alpha x Acc + vector_beta x C
+    OnlyAlphaPerChannelScaling,        // D = vector_alpha x Acc
+    Nothing                            // D = Acc
   };
 };
 
