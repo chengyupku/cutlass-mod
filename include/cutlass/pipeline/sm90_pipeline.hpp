@@ -785,7 +785,7 @@ private :
 
   CUTLASS_DEVICE
   void producer_acquire(uint32_t stage, uint32_t phase, ProducerToken barrier_token) {
-    if (stage != params_.dsmem_recv_stage && barrier_token == BarrierStatus::WaitAgain) {
+    if (barrier_token == BarrierStatus::WaitAgain) {
       empty_barrier_ptr_[stage].wait(phase);
     }
 

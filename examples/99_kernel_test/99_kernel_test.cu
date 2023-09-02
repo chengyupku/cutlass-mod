@@ -188,7 +188,7 @@ struct Options {
     help(false),
     m(16384), n(16384), k(16384),
     alpha(1.f), beta(0.f),
-    iterations(10)
+    iterations(0)
   { }
 
   // Parses the command line
@@ -358,7 +358,7 @@ bool verify(const Options &options) {
 
 /// Execute a given example GEMM computation
 template <typename Gemm>
-int run(Options &options)
+int run(Options &options, int& passed, int& failed)
 {
   initialize(options);
 
@@ -387,11 +387,15 @@ int run(Options &options)
   Result result;
   result.passed = verify(options);
 
-  std::cout << "  Disposition: " << (result.passed ? "Passed" : "Failed") << std::endl;
+  // std::cout << "  Disposition: " << (result.passed ? "Passed" : "Failed") << std::endl;
 
   if (!result.passed) {
-    exit(-1);
+    failed++;
   }
+  else {
+    passed++;
+  }
+  std::cout << "Passed:" << passed << ", failed:" << failed << std::endl;
 
   // Run profiling loop
   if (options.iterations > 0)
@@ -461,8 +465,12 @@ int main(int argc, char const **args) {
   // Evaluate CUTLASS kernels
   //
 
+  int passed = 0;
+  int failed = 0;
 #if defined(CUTLASS_ARCH_MMA_SM90_SUPPORTED)
-  run<Gemm>(options);
+  for (int i=0; i<10000; i++) {
+    run<Gemm>(options, passed, failed);
+  }
 #endif
   return 0;
 }

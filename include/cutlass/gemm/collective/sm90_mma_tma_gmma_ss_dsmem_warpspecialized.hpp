@@ -705,9 +705,7 @@ struct CollectiveMma<
       warpgroup_fence_operand(accum);
 
       // UNLOCK smem_pipe_release, done _computing_ on it
-      if (smem_pipe_release.index() != dsmem_copy_stage) {
-        pipeline.consumer_release(smem_pipe_release);
-      }
+      pipeline.consumer_release(smem_pipe_release);
 // #if PROFILE
 //       if(PRINT_CONDITION(128) && prof_iter < PROFILE_ITER) {
 //         end_clock = get_clock();
@@ -777,9 +775,7 @@ struct CollectiveMma<
     warpgroup_wait<0>();
 
     for (int count = 0; count < prologue_mma_count; ++count) {
-      if (smem_pipe_release.index() != dsmem_copy_stage) {
-        pipeline.consumer_release(smem_pipe_release);     // UNLOCK smem_pipe_release, done _computing_ on it
-      }
+      pipeline.consumer_release(smem_pipe_release);     // UNLOCK smem_pipe_release, done _computing_ on it
       if (smem_pipe_release.index() == dsmem_copy_stage) {
         if (threadIdx.x == 128) {
           // may have bug
