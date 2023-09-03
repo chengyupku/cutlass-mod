@@ -75,6 +75,9 @@
 
 #include "helper.h"
 
+#define TEST_CORRECTNESS 0
+#define TEST_ROUND 10000
+
 using namespace cute;
 
 #if defined(CUTLASS_ARCH_MMA_SM90_SUPPORTED)
@@ -188,7 +191,7 @@ struct Options {
     help(false),
     m(16384), n(16384), k(16384),
     alpha(1.f), beta(0.f),
-    iterations(0)
+    iterations(10)
   { }
 
   // Parses the command line
@@ -398,6 +401,7 @@ int run(Options &options, int& passed, int& failed)
   std::cout << "Passed:" << passed << ", failed:" << failed << std::endl;
 
   // Run profiling loop
+#if !TEST_CORRECTNESS
   if (options.iterations > 0)
   {
     GpuTimer timer;
@@ -416,6 +420,7 @@ int run(Options &options, int& passed, int& failed)
     std::cout << "  Avg runtime: " << result.avg_runtime_ms << " ms" << std::endl;
     std::cout << "  GFLOPS: " << result.gflops << std::endl;
   }
+#endif
 
   return 0;
 }
@@ -464,13 +469,18 @@ int main(int argc, char const **args) {
   //
   // Evaluate CUTLASS kernels
   //
-
   int passed = 0;
   int failed = 0;
-#if defined(CUTLASS_ARCH_MMA_SM90_SUPPORTED)
-  for (int i=0; i<10000; i++) {
+#if TEST_CORRECTNESS
+  #if defined(CUTLASS_ARCH_MMA_SM90_SUPPORTED)
+    for (int i=0; i<TEST_ROUND; i++) {
+      run<Gemm>(options, passed, failed);
+    }
+  #endif
+#else
+  #if defined(CUTLASS_ARCH_MMA_SM90_SUPPORTED)
     run<Gemm>(options, passed, failed);
-  }
+  #endif
 #endif
   return 0;
 }
