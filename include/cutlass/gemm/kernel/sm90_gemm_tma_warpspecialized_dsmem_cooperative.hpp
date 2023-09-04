@@ -248,14 +248,6 @@ public:
   CUTLASS_DEVICE
   void
   operator()(Params const& params, char* smem_buf) {
-#if 0
-        if (thread_idx==0               && blockIdx.x==0
-                                        && blockIdx.y==0
-                                        && blockIdx.z==0)
-        {
-          print("!!!!!!!!!!!!!!!!!!\n"); 
-        }
-#endif
     using namespace cute;
     using X = Underscore;
 
@@ -407,6 +399,10 @@ public:
     // Wait for all thread blocks in the Cluster
     cluster_wait_fn();
 
+    #if PROFILE
+    uint64_t consumer_wait_latency[PROFILE_ITER];
+    #endif
+
     // int iter = 0;
     if (warp_group_role == WarpGroupRole::Producer) {
       cutlass::arch::warpgroup_reg_dealloc<LoadRegisterRequirement>();
@@ -458,11 +454,8 @@ public:
         // Get next work tile
         scheduler.advance_to_next_work();
         work_tile_info = scheduler.get_current_work(params.scheduler);
-#if 0
-        if (thread_idx==0               && blockIdx.x==0
-                                        && blockIdx.y==0
-                                        && blockIdx.z==0)
-        {
+        #if 0
+        if (PRINT_CONDITION(0)) {
           print("work_tile_info      : "); 
           print("%d, ", work_tile_info.M_idx);
           print("%d, ", work_tile_info.N_idx);
@@ -470,34 +463,15 @@ public:
           print("%u",   work_tile_info.is_valid_tile);
           print("\n");
         }
-#endif
-#if 0
-        if (threadIdx.x==0)
-        {
-          print("(%d, %d, %d): loop finish \n", blockIdx.x, blockIdx.y, blockIdx.z);
-        }
-#endif
+        #endif
       } // Scheduler work fetch loop
-#if 0
-      if (threadIdx.x==0)
-      {
-        print("(%d, %d, %d): load finish \n", blockIdx.x, blockIdx.y, blockIdx.z);
-      }
-#endif
       // Make sure all Consumer Warp Groups have been waited upon
       collective_mainloop.load_tail(mainloop_pipeline, 
                                     mainloop_pipe_producer_state, 
-                                    receiver_ready_phase,
-                                    stage_num - 1);
+                                    receiver_ready_phase);
       if (collective_epilogue.is_source_needed()) {
         collective_epilogue.load_tail(epi_load_pipeline, epi_load_pipe_producer_state);
       }
-#if 0
-      if (threadIdx.x==0)
-      {
-        print("(%d, %d, %d): producer finish \n", blockIdx.x, blockIdx.y, blockIdx.z);
-      }
-#endif
     } // Producer Warp Group End
 
     else if (warp_group_role == WarpGroupRole::Consumer0 || warp_group_role == WarpGroupRole::Consumer1) {
@@ -521,14 +495,16 @@ public:
           mma_thread_idx,
           shared_storage.tensors.mainloop,
           params.mainloop
+          #if PROFILE
+          , consumer_wait_latency
+          #endif
         );
 
         // Make sure the math instructions are done and free buffers before entering the epilogue
         collective_mainloop.mma_tail(
           mainloop_pipeline,
           mainloop_pipe_consumer_state,
-          k_tile_count,
-          stage_num - 1
+          k_tile_count
         );
         // Update starting mainloop pipeline state for the next tile
         mainloop_pipe_consumer_state.advance(k_tile_count);
@@ -555,12 +531,14 @@ public:
         scheduler.advance_to_next_work();
         work_tile_info = scheduler.get_current_work(params.scheduler);
       } // Scheduler work fetch loop
-#if 0
-      if (threadIdx.x==128)
-      {
-        print("(%d, %d, %d): consumer finish \n", blockIdx.x, blockIdx.y, blockIdx.z);
+
+      #if PROFILE
+      if (PRINT_CONDITION(128)) {
+        for (int i=0; i<PROFILE_ITER; i++)
+          printf("[consumer_wait_latency]:%lu\n", consumer_wait_latency[i]);
       }
-#endif
+      #endif
+
     } // Consumer Warp Groups End
   }
 };

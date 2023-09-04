@@ -322,27 +322,16 @@ dsmem_copy( ClusterShape cluster_shape,
   // copy_mat: 0 for A, 1 for B
   assert(copy_mat == 0 || copy_mat == 1; "invalid copy_mat");
   uint32_t next_block;
-  if (copy_mat == 0)
-  {
+  if (copy_mat == 0) {
     next_block = (cluster_local_block_id.y + 1) % size<1>(cluster_shape);
   }
-  else if (copy_mat == 1)
-  {
+  else if (copy_mat == 1) {
     next_block = (cluster_local_block_id.x + 1) % size<0>(cluster_shape);
   }
   uint32_t src_int_addr = cast_smem_ptr_to_uint(src_ptr);
   uint32_t smem_int_mbar = set_block_rank(cast_smem_ptr_to_uint(mbar_ptr), next_block);
   uint32_t remote_addr = set_block_rank(cast_smem_ptr_to_uint(dst_ptr), next_block);
-#if 0
-    if (threadIdx.x==0              && blockIdx.x==0
-                                    && blockIdx.y==0
-                                    && blockIdx.z==0)
-    {
-      print("src_int_addr: %u\n", src_ptr);
-      print("smem_int_mbar: %u\n", mbar_ptr);
-      print("remote_addr: %u\n", dst_ptr);
-    }
-#endif
+
   asm volatile (
           "cp.async.bulk.shared::cluster.shared::cta.mbarrier::complete_tx::bytes"
           " [%0], [%1], %2, [%3];"
