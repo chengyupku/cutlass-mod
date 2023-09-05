@@ -256,6 +256,7 @@ struct CollectiveMma<
       int& sender_ready_phase,
       int& sender_dsmem_copy_finish_phase,
       int& receiver_dsmem_copy_finish_phase,
+      int& mma_wait_phase,
       TensorStorage& shared_tensors)
   {
     using namespace cute;
@@ -450,20 +451,26 @@ struct CollectiveMma<
         pipeline.receiver_arrive_dsmem_copy_finish(src_A_block, 0);
       }
     }
-    // monitor dsmem copy of B
-    if (warp_idx_in_warp_group == 3 and lane_predicate and pipeline_params.dsmem_copy_B) {
-      int k_dsmem_tile_count = k_tile_count / K_PIPE_MAX;
-      dim3 cluster_local_block_id = cute::block_id_in_cluster();
-      uint32_t src_B_block = cluster_local_block_id.x == 0 ?
-                              size<0>(ClusterShape{}) - 1 :
-                              cluster_local_block_id.x - 1; 
-
+    // monitor consumer_wait conditions, to accelerate consumer_wait()
+    if (warp_idx_in_warp_group == 3 and lane_predicate) {
+      // may have bug
+      int mma_stage = 0;
       CUTLASS_PRAGMA_NO_UNROLL
-      for ( ; k_dsmem_tile_count > 0; --k_dsmem_tile_count)
+      for ( ; k_tile_count > 0; --k_tile_count)
       {
-        pipeline.receiver_wait_dsmem_copy_finish(receiver_dsmem_copy_finish_phase, 1);
-        receiver_dsmem_copy_finish_phase ^= 1;
-        pipeline.receiver_arrive_dsmem_copy_finish(src_B_block, 1);
+        pipeline.mma_wait(mma_stage, mma_wait_phase);
+        // if (PRINT_CONDITION(96) && prof_iter < PROFILE_ITER && mma_stage==pipeline_params.dsmem_recv_stage) {
+        //   monitor_wait_done[prof_iter] = get_clock();
+        //   mma_wait_dsmem_done[prof_iter] = t0[0];
+        //   wait_B[prof_iter] = t2[0] - t1[0];
+        //   ++prof_iter;
+        // }
+        pipeline.arrive_mma(mma_stage);
+        mma_stage++;
+        if (mma_stage == K_PIPE_MAX) {
+          mma_stage = 0;
+          mma_wait_phase ^= 1;
+        }
       }
     }
   }

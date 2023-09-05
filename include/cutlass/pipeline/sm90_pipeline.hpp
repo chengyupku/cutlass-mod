@@ -501,6 +501,7 @@ public :
     SignalBarrier can_send_barrier_[2];
     SignalBarrier copy_finish_barrier_[2];
     FullBarrier dsmem_barrier_[2];
+    SignalBarrier mma_wait_barrier_[Stages];
   };
 
   enum class ThreadCategory {
@@ -532,7 +533,8 @@ public :
       , empty_barrier_ptr_(&storage.empty_barrier_[0]) 
       , can_send_barrier_ptr_(&storage.can_send_barrier_[0])
       , copy_finish_barrier_ptr_(&storage.copy_finish_barrier_[0])
-      , dsmem_barrier_ptr_(&storage.dsmem_barrier_[0]) {
+      , dsmem_barrier_ptr_(&storage.dsmem_barrier_[0])
+      , mma_wait_barrier_ptr(&storage.mma_wait_barrier_[0]) {
 
     int warp_idx = canonical_warp_idx();
     int lane_predicate = cute::elect_one_sync();
@@ -550,6 +552,7 @@ public :
           num_consumer_warpgroups_per_cluster;
       for (int i = 0; i < Stages; ++i) {
         empty_barrier_ptr_[i].init(multicast_consumer_arrival_count);
+        mma_wait_barrier_ptr[i].init(1);
       }
       // Barrier SIGNAL init
       can_send_barrier_ptr_[0].init(1);
@@ -684,6 +687,42 @@ public :
   }
 
   CUTLASS_DEVICE
+  void mma_wait(uint32_t stage, uint32_t phase) {
+    if (stage == params_.dsmem_recv_stage) {
+      // phase may have bug
+      if (params_.dsmem_copy_A) {
+        uint32_t done = dsmem_barrier_ptr_[0].test_wait(phase);
+        if (not done) {
+          dsmem_barrier_ptr_[0].wait(phase);
+        }
+      }
+      if (params_.dsmem_copy_B) {
+        uint32_t done = dsmem_barrier_ptr_[1].test_wait(phase);
+        if (not done) {
+          dsmem_barrier_ptr_[1].wait(phase);
+        }
+      }
+    }
+    if (stage != params_.dsmem_recv_stage || not params_.dsmem_copy_A) {
+      uint32_t done = full_barrier_ptr_[0][stage].test_wait(phase);
+      if (not done) {
+        full_barrier_ptr_[0][stage].wait(phase);
+      }
+    }
+    if (stage != params_.dsmem_recv_stage || not params_.dsmem_copy_B) {
+      uint32_t done = full_barrier_ptr_[1][stage].test_wait(phase);
+      if (not done) {
+        full_barrier_ptr_[1][stage].wait(phase);
+      }
+    }
+  }
+
+  CUTLASS_DEVICE
+  void arrive_mma(uint32_t stage) {
+    mma_wait_barrier_ptr[stage].arrive();
+  }
+
+  CUTLASS_DEVICE
   void producer_commit(PipelineState<Stages> state, uint32_t bytes) {
     producer_commit(state.index(), bytes);
   }
@@ -772,6 +811,7 @@ private :
   SignalBarrier *can_send_barrier_ptr_ = nullptr;
   SignalBarrier *copy_finish_barrier_ptr_ = nullptr;
   FullBarrier *dsmem_barrier_ptr_ = nullptr;
+  SignalBarrier *mma_wait_barrier_ptr = nullptr;
   Params params_;
 
   CUTLASS_DEVICE
@@ -866,17 +906,23 @@ private :
           dsmem_barrier_ptr_[1].wait(phase);
         }
       }
-    }
-    if (stage != params_.dsmem_recv_stage || not params_.dsmem_copy_A) {
-      uint32_t done = full_barrier_ptr_[0][stage].test_wait(phase);
-      if (not done) {
-        full_barrier_ptr_[0][stage].wait(phase);
+      if (not params_.dsmem_copy_A) {
+        uint32_t done = full_barrier_ptr_[0][stage].test_wait(phase);
+        if (not done) {
+          full_barrier_ptr_[0][stage].wait(phase);
+        }
+      }
+      if (not params_.dsmem_copy_B) {
+        uint32_t done = full_barrier_ptr_[1][stage].test_wait(phase);
+        if (not done) {
+          full_barrier_ptr_[1][stage].wait(phase);
+        }
       }
     }
-    if (stage != params_.dsmem_recv_stage || not params_.dsmem_copy_B) {
-      uint32_t done = full_barrier_ptr_[1][stage].test_wait(phase);
+    else {
+      uint32_t done = mma_wait_barrier_ptr[stage].test_wait(phase);
       if (not done) {
-        full_barrier_ptr_[1][stage].wait(phase);
+        mma_wait_barrier_ptr[stage].wait(phase);
       }
     }
   }

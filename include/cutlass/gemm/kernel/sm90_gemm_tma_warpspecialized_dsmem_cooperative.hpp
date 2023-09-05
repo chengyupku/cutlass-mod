@@ -349,6 +349,7 @@ public:
     int sender_ready_phase = 0;
     int sender_dsmem_copy_finish_phase = 1;
     int receiver_dsmem_copy_finish_phase = 0;
+    int mma_wait_phase = 0;
 
     auto cluster_wait_fn = [&] () {
       // We need this to guarantee that the Pipeline init is visible
@@ -431,6 +432,7 @@ public:
           sender_ready_phase,
           sender_dsmem_copy_finish_phase,
           receiver_dsmem_copy_finish_phase,
+          mma_wait_phase,
           shared_storage.tensors.mainloop
         );
         // Update starting pipeline state for the next tile
