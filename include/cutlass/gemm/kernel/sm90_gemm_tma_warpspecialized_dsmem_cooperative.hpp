@@ -402,6 +402,11 @@ public:
 
     #if PROFILE
     uint64_t consumer_wait_latency[PROFILE_ITER];
+    uint64_t issue_copy_B[PROFILE_ITER];
+    uint64_t copy_B_done[PROFILE_ITER];
+    uint64_t on_consumer_wait[PROFILE_ITER];
+    uint64_t mma_release[PROFILE_ITER];
+    uint64_t issue_dsmem[PROFILE_ITER];
     #endif
 
     // int iter = 0;
@@ -434,6 +439,11 @@ public:
           receiver_dsmem_copy_finish_phase,
           mma_wait_phase,
           shared_storage.tensors.mainloop
+          #if PROFILE
+          , issue_copy_B
+          , copy_B_done
+          , issue_dsmem
+          #endif
         );
         // Update starting pipeline state for the next tile
         mainloop_pipe_producer_state.advance(k_tile_count);
@@ -474,6 +484,25 @@ public:
       if (collective_epilogue.is_source_needed()) {
         collective_epilogue.load_tail(epi_load_pipeline, epi_load_pipe_producer_state);
       }
+
+      #if PROFILE
+      if (PRINT_CONDITION(0)) {
+        for (int i=0; i<PROFILE_ITER; i++) {
+          printf("[issue_copy_B]:%lu\n", issue_copy_B[i]);
+        }
+      }
+      if (PRINT_CONDITION(32)) {
+        for (int i=0; i<PROFILE_ITER; i++) {
+          printf("[issue_dsmem]:%lu\n", issue_dsmem[i]);
+        }
+      }
+      if (PRINT_CONDITION(96)) {
+        for (int i=0; i<PROFILE_ITER; i++) {
+          printf("[copy_B_done]:%lu\n", copy_B_done[i]);
+        }
+      }
+      #endif
+
     } // Producer Warp Group End
 
     else if (warp_group_role == WarpGroupRole::Consumer0 || warp_group_role == WarpGroupRole::Consumer1) {
@@ -499,6 +528,8 @@ public:
           params.mainloop
           #if PROFILE
           , consumer_wait_latency
+          , on_consumer_wait
+          , mma_release
           #endif
         );
 
@@ -536,8 +567,24 @@ public:
 
       #if PROFILE
       if (PRINT_CONDITION(128)) {
-        for (int i=0; i<PROFILE_ITER; i++)
-          printf("[consumer_wait_latency]:%lu\n", consumer_wait_latency[i]);
+        float sum = 0;
+        for (int i=0; i<PROFILE_ITER; i++) {
+          printf("[consumer_wait_latency_0]:%lu\n", consumer_wait_latency[i]);
+          printf("[on_consumer_wait_0]:%lu\n", on_consumer_wait[i]);
+          printf("[mma_release_0]:%lu\n", mma_release[i]);
+          sum += consumer_wait_latency[i];
+        }
+        printf("[consumer_wait_latency_0 MEAN]:%f\n", float(sum/PROFILE_ITER));
+      }
+      if (PRINT_CONDITION(256)) {
+        float sum = 0;
+        for (int i=0; i<PROFILE_ITER; i++) {
+          printf("[consumer_wait_latency_1]:%lu\n", consumer_wait_latency[i]);
+          printf("[on_consumer_wait_1]:%lu\n", on_consumer_wait[i]);
+          printf("[mma_release_1]:%lu\n", mma_release[i]);
+          sum += consumer_wait_latency[i];
+        }
+        printf("[consumer_wait_latency_1 MEAN]:%f\n", float(sum/PROFILE_ITER));
       }
       #endif
 

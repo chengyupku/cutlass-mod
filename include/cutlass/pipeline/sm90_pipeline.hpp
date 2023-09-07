@@ -551,12 +551,12 @@ public :
       uint32_t const multicast_consumer_arrival_count = (cute::size<0>(cluster_shape) + cute::size<1>(cluster_shape) - 1) *
           num_consumer_warpgroups_per_cluster;
       for (int i = 0; i < Stages; ++i) {
-        empty_barrier_ptr_[i].init(multicast_consumer_arrival_count);
+        empty_barrier_ptr_[i].init(num_consumer_warpgroups_per_cluster);
         mma_wait_barrier_ptr[i].init(1);
       }
       // Barrier SIGNAL init
-      can_send_barrier_ptr_[0].init(1);
-      can_send_barrier_ptr_[1].init(1);
+      can_send_barrier_ptr_[0].init(2);
+      can_send_barrier_ptr_[1].init(2);
       copy_finish_barrier_ptr_[0].init(1);
       copy_finish_barrier_ptr_[1].init(1);
       dsmem_barrier_ptr_[0].init(1);
@@ -931,7 +931,9 @@ private :
   // Ensures all blocks in the Same Row and Column get notifed.
   CUTLASS_DEVICE
   void consumer_release(uint32_t stage, uint32_t skip = false) {
-    empty_barrier_ptr_[stage].arrive(dst_blockid_, is_signalling_thread_ & (!skip));
+    if (threadIdx.x==128 || threadIdx.x==256) {
+      empty_barrier_ptr_[stage].arrive();
+    }
     #ifndef NDEBUG
     if (params_.role == ThreadCategory::Producer || params_.role == ThreadCategory::NonParticipant) {
       asm volatile ("brkpt;\n" ::);
