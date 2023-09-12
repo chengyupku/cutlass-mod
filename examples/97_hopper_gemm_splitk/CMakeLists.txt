@@ -1,5 +1,5 @@
 
-# Copyright (c) 2017 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2023 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # Redistribution and use in source and binary forms, with or without
@@ -30,7 +30,6 @@
 
 
 cutlass_example_add_executable(
-  97_hopper_gemm_reduction_fusion
-  hopper_gemm_reduction_fusion.cu
+  97_hopper_gemm_splitk
+  97_hopper_gemm_splitk.cu
   )
-

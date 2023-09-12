@@ -71,5 +71,6 @@ struct CollectiveMma {
 #include "sm90_mma_tma_gmma_ss.hpp"
 #include "sm90_mma_tma_gmma_rs_warpspecialized.hpp"
 #include "sm90_mma_tma_gmma_ss_warpspecialized.hpp"
+#include "sm90_mma_tma_gmma_ss_warpspecialized_splitk.hpp"
 #include "sm90_mma_tma_gmma_ss_dsmem_warpspecialized.hpp"
 /////////////////////////////////////////////////////////////////////////////////////////////////
