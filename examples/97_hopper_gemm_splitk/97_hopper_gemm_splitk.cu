@@ -110,34 +110,23 @@ using ClusterShape        = Shape<_1,_2,_1>;                                // S
 using StageCountType = cutlass::gemm::collective::StageCountAuto;           // Stage count maximized based on the tile size
 using KernelSchedule = cutlass::gemm::collective::KernelScheduleAuto;       // Kernel to launch based on the default setting in the Collective Builder 
 
-using CollectiveEpilogue = typename cutlass::epilogue::collective::CollectiveBuilder<
-    cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp,
-    TileShape, ClusterShape,
-    cutlass::epilogue::collective::EpilogueTileAuto,
-    ElementAccumulator, ElementAccumulator,
-    ElementC, LayoutC, AlignmentC,
-    ElementC, LayoutC, AlignmentC,
-    cutlass::epilogue::TmaWarpSpecializedCooperative
-  >::CollectiveOp;
-
-using CollectiveMainloop = typename cutlass::gemm::collective::CollectiveBuilder<
-    ArchTag, OperatorClass,
-    ElementA, LayoutA, AlignmentA,
-    ElementB, LayoutB, AlignmentB,
-    ElementAccumulator,
-    TileShape, ClusterShape,
-    cutlass::gemm::collective::StageCountAutoCarveout<
-      sizeof(typename CollectiveEpilogue::SharedStorage)>,
-    cutlass::gemm::KernelTmaWarpSpecializedCooperativeSplitK
-  >::CollectiveOp;
-
-using GemmKernel = cutlass::gemm::kernel::GemmUniversal<
-    Shape<int,int,int>, // Indicates ProblemShape
-    CollectiveMainloop,
-    CollectiveEpilogue
->;
-
-using Gemm = cutlass::gemm::device::GemmUniversalAdapter<GemmKernel>;
+using Gemm = cutlass::gemm::device::Sm90GemmSplitKParallel< ElementA,
+                                                            LayoutA,
+                                                            AlignmentA,
+                                                            ElementB,
+                                                            LayoutB,
+                                                            AlignmentB,
+                                                            ElementC,
+                                                            LayoutC,
+                                                            AlignmentC,
+                                                            ElementAccumulator,
+                                                            ArchTag,
+                                                            OperatorClass,
+                                                            TileShape,
+                                                            ClusterShape,
+                                                            StageCountType,
+                                                            KernelSchedule
+                                                            >;
 
 // Reference device GEMM implementation type
 using DeviceGemmReference = cutlass::reference::device::Gemm<
@@ -186,12 +175,14 @@ struct Options {
   float alpha, beta;
   int iterations;
   int m, n, k;
+  int split_k_slices;
 
   Options():
     help(false),
     m(16384), n(16384), k(16384),
     alpha(1.f), beta(0.f),
-    iterations(10)
+    iterations(10),
+    split_k_slices(2)
   { }
 
   // Parses the command line
@@ -328,7 +319,7 @@ typename Gemm::Arguments args_from_options(const Options &options)
 
 bool verify(const Options &options) {
   cutlass::TensorRef ref_A(block_A.get(), Gemm::LayoutA::packed({options.m, options.k}));
-  cutlass::TensorRef ref_B(block_B.get(), Gemm::LayoutB::packed({options.n, options.k}));
+  cutlass::TensorRef ref_B(block_B.get(), Gemm::LayoutB::packed({options.k, options.n}));
   cutlass::TensorRef ref_C(block_C.get(), Gemm::LayoutC::packed({options.m, options.n}));
   cutlass::TensorRef ref_D(block_ref_D.get(), Gemm::LayoutD::packed({options.m, options.n}));
 

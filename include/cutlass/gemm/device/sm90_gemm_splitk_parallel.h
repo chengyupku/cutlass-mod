@@ -75,105 +75,90 @@ namespace cutlass::gemm::device {
   on the two kernel API types, and thus, GemmUniversalAdapter's behaviour might
   differ between the two specializations.
 */
-template <class GemmKernel_, class Enable = void>
-class GemmUniversalAdapter;
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////// CUTLASS 3.x API /////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-template <class GemmKernel_>
-class GemmUniversalAdapter<
-  GemmKernel_,
-  cute::enable_if_t<gemm::detail::IsCutlass3GemmKernel<GemmKernel_>::value>>
+template <
+  class ElementA_,
+  class LayoutA_,
+  int AlignmentA,
+  class ElementB_,
+  class LayoutB_,
+  int AlignmentB,
+  class ElementC_,
+  class LayoutC_,
+  int AlignmentC,
+  class ElementAccumulator_,
+  class ArchTag_,
+  class OperatorClass_,
+  class TileShape_,
+  class ClusterShape_,
+  class StageCountType_,
+  class KernelSchedule_
+>
+class Sm90GemmSplitKParallel
 {
 public:
-  using GemmKernel = GemmKernel_;
-  using TileShape = typename GemmKernel::TileShape;
-  using ElementA = typename GemmKernel::ElementA;
-  using ElementB = typename GemmKernel::ElementB;
-  using ElementC = typename GemmKernel::ElementC;
-  using ElementD = typename GemmKernel::ElementD;
-  using ElementAccumulator = typename GemmKernel::TiledMma::ValTypeC;
-  using DispatchPolicy = typename GemmKernel::DispatchPolicy;
-  using CollectiveMainloop = typename GemmKernel::CollectiveMainloop;
-  using CollectiveEpilogue = typename GemmKernel::CollectiveEpilogue;
 
-  // Map back to 2.x type as best as possible
-  using LayoutA = gemm::detail::StrideToLayoutTagA_t<typename GemmKernel::StrideA>;
-  using LayoutB = gemm::detail::StrideToLayoutTagB_t<typename GemmKernel::StrideB>;
-  using LayoutC = gemm::detail::StrideToLayoutTagC_t<typename GemmKernel::StrideC>;
-  using LayoutD = gemm::detail::StrideToLayoutTagC_t<typename GemmKernel::StrideD>;
+  using ElementA = ElementA_;
+  using LayoutA = LayoutA_;
+  using ElementB = ElementB_;
+  using LayoutB = LayoutB_;
+  using ElementC = ElementC_;
+  using LayoutC = LayoutC_;
+  // may have bug
+  using ElementD = ElementC;
+  using LayoutD = LayoutC;
+  using ElementAccumulator = ElementAccumulator_;
+  using ArchTag = ArchTag_;
+  using OperatorClass = OperatorClass_;
+  using TileShape = TileShape_;
+  using ClusterShape = ClusterShape_;
+  using StageCountType = StageCountType_;
+  using KernelSchedule = KernelSchedule_;
 
-  // NOTE: 3.0 kernels do not support complex transforms for now ...
-  static ComplexTransform const kTransformA = ComplexTransform::kNone;
-  static ComplexTransform const kTransformB = ComplexTransform::kNone;
+  using CollectiveEpilogueBuilder = typename cutlass::epilogue::collective::CollectiveBuilder<
+      cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp,
+      TileShape, ClusterShape,
+      cutlass::epilogue::collective::EpilogueTileAuto,
+      ElementAccumulator, ElementAccumulator,
+      ElementC, LayoutC, AlignmentC,
+      ElementC, LayoutC, AlignmentC,
+      cutlass::epilogue::TmaWarpSpecializedCooperativeSplitK
+    >;
+  using CollectiveEpilogue = typename CollectiveEpilogueBuilder::CollectiveOp;
+  using EpilogueOutputOp = typename CollectiveEpilogueBuilder::ThreadOp;
 
-  // Legacy: Assume MultiplyAdd only since we do not use this tag type in 3.0
-  using MathOperator = cutlass::arch::OpMultiplyAdd;
+  using CollectiveMainloopBuilder = typename cutlass::gemm::collective::CollectiveBuilder<
+      ArchTag, OperatorClass,
+      ElementA, LayoutA, AlignmentA,
+      ElementB, LayoutB, AlignmentB,
+      ElementAccumulator,
+      TileShape, ClusterShape,
+      cutlass::gemm::collective::StageCountAutoCarveout<
+        sizeof(typename CollectiveEpilogue::SharedStorage)>,
+      cutlass::gemm::KernelTmaWarpSpecializedCooperativeSplitK
+    >;
+  using CollectiveMainloop = typename CollectiveMainloopBuilder::CollectiveOp;
 
-  // If our TiledMMA's instruction thread layout size is larger than 1, we know its a tensorop!
-  using OperatorClass = cute::conditional_t<
-      (cute::size(typename GemmKernel::TiledMma::AtomThrID{}) > 1),
-      cutlass::arch::OpClassTensorOp, cutlass::arch::OpClassSimt>;
+  using GemmKernel = cutlass::gemm::kernel::GemmUniversal<
+      Shape<int,int,int>, // Indicates ProblemShape
+      CollectiveMainloop,
+      CollectiveEpilogue
+    >;
 
-  using ArchTag = typename GemmKernel::ArchTag;
-
-  // NOTE: Assume identity swizzle for now
-  static_assert(cute::is_void_v<typename GemmKernel::GridSwizzle>,
-    "CUTLASS 3.x kernel types do not support grid swizzle functors yet.");
-  using ThreadblockSwizzle = cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>;
-
-  // Assume TiledMma's ShapeMNK is the same as 2.x's ThreadblockShape
-  using ThreadblockShape = cutlass::gemm::GemmShape<
-      cute::size<0>(TileShape{}),
-      cute::size<1>(TileShape{}),
-      cute::size<2>(TileShape{})>;
-
-  using ClusterShape = cutlass::gemm::GemmShape<
-      cute::size<0>(typename GemmKernel::DispatchPolicy::ClusterShape{}),
-      cute::size<1>(typename GemmKernel::DispatchPolicy::ClusterShape{}),
-      cute::size<2>(typename GemmKernel::DispatchPolicy::ClusterShape{})>;
-
-  // Instruction shape is easy too, since we get that directly from our TiledMma's atom shape
-  using InstructionShape = cutlass::gemm::GemmShape<
-      cute::size<0>(typename CollectiveMainloop::TiledMma::AtomShape_MNK{}),
-      cute::size<1>(typename CollectiveMainloop::TiledMma::AtomShape_MNK{}),
-      cute::size<2>(typename CollectiveMainloop::TiledMma::AtomShape_MNK{})>;
-
-  // Legacy: provide a correct warp count, but no reliable warp shape
-  static int const kThreadCount = GemmKernel::MaxThreadsPerBlock;
-
-  // Warp shape is not a primary API type in 3.x
-  // But we can best approximate it by inspecting the TiledMma::TiledShape_MNK
-  // For this, we make the assumption that we always have 4 warps along M, and rest along N, none along K
-  // We also always round up the warp count to 4 if the tiled mma is smaller than 128 threads
-  static constexpr int WarpsInMma = cute::max(4, cute::size(typename GemmKernel::TiledMma{}) / 32);
-  static constexpr int WarpsInMmaM = 4;
-  static constexpr int WarpsInMmaN = cute::ceil_div(WarpsInMma, WarpsInMmaM);
-  using WarpCount = cutlass::gemm::GemmShape<WarpsInMmaM, WarpsInMmaN, 1>;
-  using WarpShape = cutlass::gemm::GemmShape<
-      cute::size<0>(typename CollectiveMainloop::TiledMma::TiledShape_MNK{}) / WarpsInMmaM,
-      cute::size<1>(typename CollectiveMainloop::TiledMma::TiledShape_MNK{}) / WarpsInMmaN,
-      cute::size<2>(typename CollectiveMainloop::TiledMma::TiledShape_MNK{})>;
-
-  static int constexpr kStages = CollectiveMainloop::DispatchPolicy::Stages;
-
-  // Inspect TiledCopy for A and B to compute the alignment size
-  static int constexpr kAlignmentA = gemm::detail::get_alignment_count_from_gmem_tiled_copy<
-      typename CollectiveMainloop::GmemTiledCopyA, ElementA>();
-  static int constexpr kAlignmentB = gemm::detail::get_alignment_count_from_gmem_tiled_copy<
-      typename CollectiveMainloop::GmemTiledCopyB, ElementB>();
-  static int constexpr kAlignmentC = gemm::detail::get_alignment_count_from_gmem_tiled_copy<
-      typename CollectiveEpilogue::GmemTiledCopyC, ElementC>();
-  static int constexpr kAlignmentD = gemm::detail::get_alignment_count_from_gmem_tiled_copy<
-      typename CollectiveEpilogue::GmemTiledCopyD, ElementD>();
-
-  using EpilogueOutputOp = typename CollectiveEpilogue::ThreadEpilogueOp;
-
-  // Split-K preserves splits that are 128b aligned
-  static int constexpr kSplitKAlignment = cute::max(
-      128 / sizeof_bits<ElementA>::value, 128 / sizeof_bits<ElementB>::value);
+  /// Reduction kernel
+  using ReductionOp = cutlass::reduction::thread::ReduceAdd<
+    ElementAccumulator, typename EpilogueOutputOp::ElementAccumulator,
+    EpilogueOutputOp::kCount
+  >;
+  using ReductionKernel = cutlass::reduction::kernel::ReduceSplitK<
+    cutlass::MatrixShape<4, 32 * EpilogueOutputOp::kCount>,
+    EpilogueOutputOp,
+    ReductionOp
+  >;
 
   /// Argument structure: User API
   using Arguments = typename GemmKernel::Arguments;

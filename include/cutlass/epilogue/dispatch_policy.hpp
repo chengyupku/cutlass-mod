@@ -37,6 +37,7 @@ namespace cutlass::epilogue {
 struct NoSmemWarpSpecialized {};
 struct TmaWarpSpecialized {};
 struct TmaWarpSpecializedCooperative {};
+struct TmaWarpSpecializedCooperativeSplitK : public TmaWarpSpecializedCooperative {};
 
 struct TmaWarpSpecializedElementwiseBase : public TmaWarpSpecialized {};
 struct TmaWarpSpecializedCooperativeElementwiseBase : public TmaWarpSpecializedCooperative {};
@@ -117,6 +118,17 @@ template<
   bool DisableSmemReuseC_
 >
 struct Sm90TmaWarpSpecialized {
+  constexpr static int StagesC = StagesC_;
+  constexpr static int StagesD = StagesD_;
+  constexpr static bool DisableSmemReuseC = DisableSmemReuseC_;
+};
+
+template<
+  int StagesC_,
+  int StagesD_,
+  bool DisableSmemReuseC_
+>
+struct Sm90TmaWarpSpecializedSplitK {
   constexpr static int StagesC = StagesC_;
   constexpr static int StagesD = StagesD_;
   constexpr static bool DisableSmemReuseC = DisableSmemReuseC_;

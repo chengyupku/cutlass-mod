@@ -314,6 +314,61 @@ public:
   using CollectiveOp = typename Impl::CollectiveOp;
 };
 
+// Tma warp-specialized split-k builder
+template <
+  class TileShape_MNK,
+  class ClusterShape_MNK,
+  class EpilogueTileType,
+  class ElementAccumulator,
+  class ElementCompute,
+  class ElementC_,
+  class GmemLayoutTagC,
+  int AlignmentC,
+  class ElementD,
+  class GmemLayoutTagD,
+  int AlignmentD,
+  class Schedule
+>
+struct CollectiveBuilder<
+    arch::Sm90,
+    arch::OpClassTensorOp,
+    TileShape_MNK,
+    ClusterShape_MNK,
+    EpilogueTileType,
+    ElementAccumulator,
+    ElementCompute,
+    ElementC_,
+    GmemLayoutTagC,
+    AlignmentC,
+    ElementD,
+    GmemLayoutTagD,
+    AlignmentD,
+    Schedule,
+    cute::enable_if_t<cute::is_same_v<Schedule, TmaWarpSpecializedCooperativeSplitK> >> {
+public:
+  using ElementC = cute::conditional_t<cute::is_void_v<ElementC_>,ElementD,ElementC_>; // prevents void ref breakages
+  static constexpr thread::ScaleType::Kind ScaleType = cute::is_void_v<ElementC_> ?
+      thread::ScaleType::OnlyAlphaScaling : thread::ScaleType::Default;
+  // static constexpr thread::ScaleType::Kind ScaleType = thread::ScaleType::Default;
+
+  static constexpr int FragmentSize = 4;
+  using ThreadOp = thread::LinearCombination<
+    ElementD, FragmentSize, ElementAccumulator, ElementCompute,
+    ScaleType, FloatRoundStyle::round_to_nearest, ElementC>;
+
+private:
+  static constexpr int StagesC = 1;
+  static constexpr int StagesD = 2;
+  static constexpr bool DisableReuseSmemC = true;
+  using Impl = detail::TmaBuilderImpl<
+    TileShape_MNK, ClusterShape_MNK, EpilogueTileType, ElementAccumulator, ElementCompute,
+    ElementC_, GmemLayoutTagC, AlignmentC, ElementD, GmemLayoutTagD, AlignmentD,
+    Schedule, ThreadOp, cutlass::epilogue::Sm90TmaWarpSpecializedSplitK<StagesC,StagesD, DisableReuseSmemC>>;
+
+public:
+  using CollectiveOp = typename Impl::CollectiveOp;
+};
+
 // Auto builder
 template <
   class TileShape_MNK,

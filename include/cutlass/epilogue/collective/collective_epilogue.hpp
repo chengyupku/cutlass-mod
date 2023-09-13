@@ -51,5 +51,6 @@ class CollectiveEpilogue {
 #include "epilogue_tensor_broadcast.hpp"
 #include "sm70_epilogue_vectorized.hpp"
 #include "sm90_epilogue_tma_warpspecialized.hpp"
+#include "sm90_epilogue_tma_warpspecialized_splitk.hpp"
 #include "sm90_epilogue_tma_warpspecialized_bias_elementwise.hpp"
 /////////////////////////////////////////////////////////////////////////////////////////////////
