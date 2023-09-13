@@ -161,52 +161,66 @@ public:
   >;
 
   /// Argument structure: User API
-  using Arguments = typename GemmKernel::Arguments;
+  using GemmArguments = typename GemmKernel::Arguments;
   /// Argument structure: Kernel API
-  using Params = typename GemmKernel::Params;
+  // using Params = typename GemmKernel::Params;
+
+  struct ReduceArguments {
+    int problem_shape_m;
+    int problem_shape_n;
+    int split_k_slices;
+    ElementC const* ptr_C;
+    ElementD const* ptr_D;
+    typename CollectiveEpilogue::StrideC dC;
+    typename CollectiveEpilogue::StrideD dD;
+    typename EpilogueOutputOp::Params epilogue;
+  };
+
+  struct Arguments {
+    GemmArguments gemm_args;
+    ReduceArguments reduce_args;
+  };
 
 private:
 
   /// Kernel API parameters object
-  Params params_;
+  typename GemmKernel::Params gemm_params_;
+  typename ReductionKernel::Params reduce_params_;
 
 public:
 
   /// Determines whether the GEMM can execute the given problem.
   static Status
   can_implement(Arguments const& args) {
-    if (GemmKernel::can_implement(args)) {
-      return Status::kSuccess;
-    }
-    else {
-      return Status::kInvalid;
-    }
+    return Status::kSuccess;
   }
 
   /// Gets the workspace size
   static size_t
   get_workspace_size(Arguments const& args) {
     size_t workspace_bytes = 0;
-    if (args.mode == GemmUniversalMode::kGemmSplitKParallel) {
-      workspace_bytes += sizeof(int) * size_t(cute::size<0>(TileShape{})) * size_t(cute::size<1>(TileShape{}));
-    }
+
+    workspace_bytes +=  args.reduce_args.problem_shape_m
+                      * args.reduce_args.problem_shape_n
+                      * args.reduce_args.split_k_slices
+                      * sizeof(ElementAccumulator);
 
     CUTLASS_TRACE_HOST("  workspace_bytes: " << workspace_bytes);
+    // printf("  workspace_bytes: %d\n", workspace_bytes);
 
-    workspace_bytes += GemmKernel::get_workspace_size(args);
     return workspace_bytes;
   }
 
   /// Computes the grid shape
   static dim3
-  get_grid_shape(Arguments const& args, void* workspace = nullptr) {
+  get_grid_shape(GemmArguments const& args, void* workspace = nullptr) {
     auto tmp_params = GemmKernel::to_underlying_arguments(args, workspace);
     return GemmKernel::get_grid_shape(tmp_params);
   }
 
   /// Computes the grid shape
   static dim3
-  get_grid_shape(Params const& params) {
+  get_grid_shape(typename GemmKernel::Params const& params) {
     return GemmKernel::get_grid_shape(params);
   }
 
@@ -254,7 +268,7 @@ public:
 
   /// Initializes GEMM state from arguments.
   Status
-  initialize(Arguments const& args, void* workspace = nullptr, cudaStream_t stream = nullptr) {
+  gemm_initialize(GemmArguments const& args, void* workspace = nullptr, cudaStream_t stream = nullptr) {
     CUTLASS_TRACE_HOST("GemmUniversal::initialize() - workspace "
       << workspace << ", stream: " << (stream ? "non-null" : "null"));
 
@@ -279,7 +293,7 @@ public:
     }
 
     // Initialize the Params structure
-    params_ = GemmKernel::to_underlying_arguments(args, workspace);
+    gemm_params_ = GemmKernel::to_underlying_arguments(args, workspace);
 
     // account for dynamic smem capacity if needed
     int smem_size = GemmKernel::SharedStorageSize;
@@ -298,27 +312,57 @@ public:
     return Status::kSuccess;
   }
 
-  /// Update API is preserved in 3.0, but does not guarantee a lightweight update of params.
+  /// Initializes Reduce state from arguments.
   Status
-  update(Arguments const& args, void* workspace = nullptr) {
-    CUTLASS_TRACE_HOST("GemmUniversal()::update() - workspace: " << workspace);
-
-    size_t workspace_bytes = get_workspace_size(args);
-    if (workspace_bytes > 0 && nullptr == workspace) {
-      return Status::kErrorWorkspaceNull;
-    }
-
-    params_ = GemmKernel::to_underlying_arguments(args, workspace);
+  reduce_initialize(ReduceArguments const& args, void* workspace = nullptr, cudaStream_t stream = nullptr) {
+    int64_t partition_stride = int64_t(args.problem_shape_m) * int64_t(args.problem_shape_n);
+    TensorRef<ElementAccumulator, layout::RowMajor> ref_workspace(
+      static_cast<ElementAccumulator *>(workspace), 
+      args.problem_shape_n);
+    cutlass::TensorRef ref_C(args.ptr_C, LayoutC::packed({args.problem_shape_m, args.problem_shape_n}));
+    cutlass::TensorRef ref_D(args.ptr_D, LayoutD::packed({args.problem_shape_m, args.problem_shape_n}));
+    reduce_params_ = typename ReductionKernel::Params(
+      MatrixCoord(args.problem_shape_m, args.problem_shape_n),
+      args.split_k_slices,
+      partition_stride,
+      ref_workspace,
+      ref_D.non_const_ref(),
+      ref_C.non_const_ref(),
+      args.epilogue
+    );
     return Status::kSuccess;
   }
+
+  Status
+  initialize(Arguments const& args, void* workspace = nullptr, cudaStream_t stream = nullptr) {
+    gemm_initialize(args.gemm_args, workspace, stream);
+    reduce_initialize(args.reduce_args, workspace, stream);
+    return Status::kSuccess;
+  }
+
+  /// Update API is preserved in 3.0, but does not guarantee a lightweight update of params.
+  // Status
+  // update(Arguments const& args, void* workspace = nullptr) {
+  //   CUTLASS_TRACE_HOST("GemmUniversal()::update() - workspace: " << workspace);
+
+  //   size_t workspace_bytes = get_workspace_size(args);
+  //   if (workspace_bytes > 0 && nullptr == workspace) {
+  //     return Status::kErrorWorkspaceNull;
+  //   }
+
+  //   params_ = GemmKernel::to_underlying_arguments(args, workspace);
+  //   return Status::kSuccess;
+  // }
 
   /// Primary run() entry point API that is static allowing users to create and manage their own params.
   /// Supplied params struct must be construct by calling GemmKernel::to_underling_arguments()
   static Status
-  run(Params& params, cudaStream_t stream = nullptr) {
+  run(typename GemmKernel::Params& gemm_params, 
+      typename ReductionKernel::Params& reduce_params ,
+      cudaStream_t stream = nullptr) {
     CUTLASS_TRACE_HOST("GemmUniversal::run()");
     dim3 const block = GemmKernel::get_block_shape();
-    dim3 const grid = get_grid_shape(params);
+    dim3 const grid = get_grid_shape(gemm_params);
 
     // configure smem size and carveout
     int smem_size = GemmKernel::SharedStorageSize;
@@ -330,13 +374,17 @@ public:
                    cute::size<1>(typename GemmKernel::DispatchPolicy::ClusterShape{}),
                    cute::size<2>(typename GemmKernel::DispatchPolicy::ClusterShape{}));
       void const* kernel = (void const*) device_kernel<GemmKernel>;
-      void* kernel_params[] = {&params};
+      void* kernel_params[] = {&gemm_params};
       launch_result = ClusterLauncher::launch(grid, cluster, block, smem_size, stream, kernel, kernel_params);
     }
     else {
       launch_result = Status::kSuccess;
-      device_kernel<GemmKernel><<<grid, block, smem_size, stream>>>(params);
+      device_kernel<GemmKernel><<<grid, block, smem_size, stream>>>(gemm_params);
     }
+
+    // block = ReductionKernel::block_shape();
+    // grid = ReductionKernel::grid_shape(reduce_params.problem_size);
+    // Kernel<ReductionKernel><<< grid, block, 0, stream >>>(reduce_params);
 
     cudaError_t result = cudaGetLastError();
     if (cudaSuccess == result && Status::kSuccess == launch_result) {
@@ -357,7 +405,7 @@ public:
   run(Arguments const& args, void* workspace = nullptr, cudaStream_t stream = nullptr) {
     Status status = initialize(args, workspace, stream);
     if (Status::kSuccess == status) {
-      status = run(params_, stream);
+      status = run(gemm_params_, reduce_params_, stream);
     }
     return status;
   }
@@ -371,13 +419,13 @@ public:
   /// Overload that allows a user to re-launch the same kernel without updating internal params struct.
   Status
   run(cudaStream_t stream = nullptr) {
-    return run(params_, stream);
+    return run(gemm_params_, reduce_params_, stream);
   }
 
   /// Overload that allows a user to re-launch the same kernel without updating internal params struct.
   Status
   operator()(cudaStream_t stream = nullptr) {
-    return run(params_, stream);
+    return run(gemm_params_, reduce_params_, stream);
   }
 };
 

@@ -30,24 +30,11 @@
  **************************************************************************************************/
 
 /*! \file
-    \brief Simple Hopper GEMM example using CUTLASS 3.0 APIs for NVIDIA Hopper architecture
-
-    This example demonstrate a simple way to instantiate and run a TF32 GEMM using the new CUTLASS 3.0
-    APIs on NVIDIA Hopper architecture. New features that will be showcased in this example are as follows:
-
-    1. NVIDIA Hopper architecture introduces a new series of tensor core instructions (GMMA) 
-    which are more efficient than the Ampere tensor core instructions.
-
-    2. NVIDIA Hopper architecture includes new Tensor Memory Accelerator (TMA) unit to transfer large 
-    blocks of data efficiently between global memory and shared memory. TMA also supports asynchronous
-    copies between thread blocks in a cluster. Another advantage is that TMA can load in FP32 data and
-    convert them implicitly to TF32.
-
-    3. This example uses the Warp Specialized kernel design (see /media/docs/efficient_gemm.md for details).
-
-    Examples:
-
-      $ ./examples/48_hopper_warp_specialized_gemm/48_hopper_warp_specialized_gemm --m=2048 --n=2048 --k=2048
+    \brief Simple split-k implementation on H100
+    * half_t input
+    * float accumulator
+    * float partial output to gmem
+    * load partial output to launch reduce kernel, half_t output to gmem 
 */
 
 #include <iostream>
@@ -97,8 +84,8 @@ using         LayoutB     = cutlass::layout::RowMajor;                   // Layo
 constexpr int AlignmentB  = 128 / cutlass::sizeof_bits<ElementB>::value;    // Memory access granularity/alignment of B matrix in units of elements (up to 16 bytes)
 
 // C/D matrix configuration
-using         ElementC    = cutlass::half_t;                                // Element type for C and D matrix operands
-using         LayoutC     = cutlass::layout::ColumnMajor;                   // Layout type for C and D matrix operands
+using         ElementC    = float;                                // Element type for C and D matrix operands
+using         LayoutC     = cutlass::layout::RowMajor;                   // Layout type for C and D matrix operands
 constexpr int AlignmentC  = 128 / cutlass::sizeof_bits<ElementC>::value;    // Memory access granularity/alignment of C matrix in units of elements (up to 16 bytes)
 
 // Core kernel configurations
@@ -157,7 +144,7 @@ uint64_t seed;
 
 cutlass::DeviceAllocation<typename Gemm::ElementA> block_A;
 cutlass::DeviceAllocation<typename Gemm::ElementB> block_B;
-cutlass::DeviceAllocation<typename cutlass::half_t> block_C;
+cutlass::DeviceAllocation<typename Gemm::ElementC> block_C;
 cutlass::DeviceAllocation<typename Gemm::EpilogueOutputOp::ElementOutput> block_D;
 cutlass::DeviceAllocation<typename Gemm::EpilogueOutputOp::ElementOutput> block_ref_D;
 
@@ -179,7 +166,7 @@ struct Options {
 
   Options():
     help(false),
-    m(16384), n(16384), k(16384),
+    m(2048), n(2048), k(2048),
     alpha(1.f), beta(0.f),
     iterations(10),
     split_k_slices(2)
@@ -307,11 +294,28 @@ void initialize(const Options &options) {
 /// Populates a Gemm::Arguments structure from the given commandline options
 typename Gemm::Arguments args_from_options(const Options &options)
 {
-  typename Gemm::Arguments arguments{
+  typename Gemm::GemmArguments gemm_arguments{
     cutlass::gemm::GemmUniversalMode::kGemm,
     {options.m, options.n, options.k},
     {block_A.get(), stride_A, block_B.get(), stride_B},
-    {{options.alpha, options.beta}, block_C.get(), stride_C, block_D.get(), stride_D}
+    {{options.alpha, options.beta}, block_C.get(), stride_C, block_D.get(), stride_D},
+    options.split_k_slices
+  };
+
+  typename Gemm::ReduceArguments reduce_arguments{
+    options.m,
+    options.n,
+    options.split_k_slices,
+    block_C.get(),
+    block_D.get(),
+    stride_C,
+    stride_D,
+    {options.alpha, options.beta}
+  };
+
+  typename Gemm::Arguments arguments{
+    gemm_arguments,
+    reduce_arguments
   };
 
   return arguments;
