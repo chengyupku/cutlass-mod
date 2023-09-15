@@ -132,6 +132,7 @@ public:
 
   // Device side arguments
   struct Arguments {
+    int split_k_slices;
     GemmUniversalMode mode{};
     ProblemShape problem_shape{};
     MainloopArguments mainloop{};
@@ -141,6 +142,7 @@ public:
 
   // Kernel entry point API
   struct Params {
+    int split_k_slices;
     GemmUniversalMode mode;
     ProblemShape problem_shape;
     MainloopParams mainloop;
@@ -178,13 +180,14 @@ public:
 
     CUTLASS_TRACE_HOST("to_underlying_arguments(): Setting persistent grid SM count to " << sm_count);
     return {
+      args.split_k_slices,
       args.mode,
       problem_shape,
       CollectiveMainloop::to_underlying_arguments(args.problem_shape, args.mainloop, workspace),
       CollectiveEpilogue::to_underlying_arguments(args.problem_shape, args.epilogue, workspace),
       {args.hw_info.device_id, sm_count},
       // modify ClusterShape{} to do Threadblock Rasterization
-      detail::PersistentTileSchedulerSm90::to_underlying_arguments(problem_shape_MNKL, TileShape{}, ClusterShape{})
+      detail::PersistentTileSchedulerSm90::to_underlying_arguments(problem_shape_MNKL, TileShape{}, ClusterShape{}, args.split_k_slices)
       // detail::PersistentTileSchedulerSm90::to_underlying_arguments(problem_shape_MNKL, TileShape{}, Shape<_1,_1,_1>{})
     };
   }
@@ -374,11 +377,11 @@ public:
     Tensor gB_nkl = local_tile(mB_nkl, blk_shape, make_coord(_,_,_), Step< X,_1,_1>{});          // (BLK_N,BLK_K,n,k,l)
 
     // Get pipeline stage increments from tensor shapes
-    auto k_tile_count = size<3>(gA_mkl);
+    auto k_tile_count = size<3>(gA_mkl) / params.split_k_slices;
     auto c_tile_count = CollectiveEpilogue::get_load_pipe_increment(blk_shape);
     auto d_tile_count = CollectiveEpilogue::get_store_pipe_increment(blk_shape);
 
-    detail::PersistentTileSchedulerSm90 scheduler;
+    detail::PersistentTileSchedulerSm90 scheduler(static_cast<uint64_t>((int(blockIdx.x))), static_cast<uint64_t>(int(gridDim.x)));
     auto work_tile_info = scheduler.get_current_work(params.scheduler);
 
     // In a warp specialized kernel, collectives expose data movement and compute operations separately
@@ -402,7 +405,8 @@ public:
         Tensor gA = gA_mkl(_,_,m_coord,_,l_coord);                                                   // (BLK_M,BLK_K,k)
         Tensor gB = gB_nkl(_,_,n_coord,_,l_coord);                                                   // (BLK_N,BLK_K,k)
 
-        auto k_tile_iter  = cute::make_coord_iterator(shape<2>(gA));
+        auto k_tile_iter  = cute::make_coord_iterator(  shape<2>(gA) / params.split_k_slices,
+                                                      ( shape<2>(gA) / params.split_k_slices) * blockIdx.y);
 
         collective_mainloop.load(
           mainloop_pipeline,

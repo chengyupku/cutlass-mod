@@ -62,16 +62,19 @@ private:
 public:
 
   struct Params {
+    // FastDivmodU64{}(x, y, z):
+    // z / divisor = x ... y
     FastDivmodU64 divmod_batch_{};
     FastDivmodU64 divmod_grid_y_{};
     FastDivmodU64 divmod_blk_m_{};
 
     uint64_t blocks_per_problem_ = 0;
+    int split_k_slices = 1;
   };
 
   template <class ProblemShapeMNKL, class TileShape, class ClusterShape>
   static Params
-  to_underlying_arguments(ProblemShapeMNKL problem_shape_mnkl, TileShape tile_shape, ClusterShape cluster_shape) {
+  to_underlying_arguments(ProblemShapeMNKL problem_shape_mnkl, TileShape tile_shape, ClusterShape cluster_shape, int split_k_slices=1) {
     // We only need the tile and cluster shape during scheduler setup, so let FTAD do the magic
     static_assert(is_static<TileShape>::value);
     static_assert(is_static<ClusterShape>::value);
@@ -82,13 +85,18 @@ public:
 
     return {
       FastDivmodU64(problem_blocks_m * problem_blocks_n),
-      FastDivmodU64(size<1>(cluster_shape)),
+      FastDivmodU64(split_k_slices > 1 ? 1 : size<1>(cluster_shape)),
       FastDivmodU64(problem_blocks_m),
-      problem_blocks_m * problem_blocks_n * problem_blocks_l
+      problem_blocks_m * problem_blocks_n * problem_blocks_l,
+      split_k_slices
     };
   }
 
   PersistentTileSchedulerSm90() = default;
+
+  CUTLASS_HOST_DEVICE
+  PersistentTileSchedulerSm90(uint64_t current_work_linear_idx, uint64_t grid_blocks_total)
+      : current_work_linear_idx_(current_work_linear_idx), grid_blocks_total_(grid_blocks_total) { }
 
   CUTLASS_DEVICE
   WorkTileInfo
@@ -124,10 +132,13 @@ public:
     uint64_t block_idx_m, block_idx_n;
     scheduler_params.divmod_blk_m_(block_idx_n, block_idx_m, blk_per_grid_dim);
     int32_t work_idx_m = static_cast<int32_t>(block_idx_m);
-    int32_t work_idx_n = static_cast<int32_t>((block_idx_n * gridDim.y) + blockIdx.y);
+    int32_t work_idx_n = 0;
+    work_idx_n =scheduler_params.split_k_slices > 1 ? static_cast<int32_t>(block_idx_n)
+                                                    : static_cast<int32_t>((block_idx_n * gridDim.y) + blockIdx.y);
+
 #if 0
   static int iter = 0;
-  if (threadIdx.x==0 && blockIdx.x==5 && blockIdx.y==1 && blockIdx.z==0)
+  if (threadIdx.x==0 && blockIdx.x==0 && blockIdx.y==1 && blockIdx.z==0)
   {
     iter += 1;
     // print("divmod_batch_ :%d, %d, %d, %d\n",  scheduler_params.divmod_batch_.divisor,

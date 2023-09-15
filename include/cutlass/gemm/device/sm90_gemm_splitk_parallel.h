@@ -177,8 +177,8 @@ public:
   };
 
   struct Arguments {
-    GemmArguments gemm_args;
-    ReduceArguments reduce_args;
+    GemmArguments gemm_args{};
+    ReduceArguments reduce_args{};
   };
 
 private:
@@ -361,8 +361,8 @@ public:
       typename ReductionKernel::Params& reduce_params ,
       cudaStream_t stream = nullptr) {
     CUTLASS_TRACE_HOST("GemmUniversal::run()");
-    dim3 const block = GemmKernel::get_block_shape();
-    dim3 const grid = get_grid_shape(gemm_params);
+    dim3 block = GemmKernel::get_block_shape();
+    dim3 grid = get_grid_shape(gemm_params);
 
     // configure smem size and carveout
     int smem_size = GemmKernel::SharedStorageSize;
@@ -382,9 +382,9 @@ public:
       device_kernel<GemmKernel><<<grid, block, smem_size, stream>>>(gemm_params);
     }
 
-    // block = ReductionKernel::block_shape();
-    // grid = ReductionKernel::grid_shape(reduce_params.problem_size);
-    // Kernel<ReductionKernel><<< grid, block, 0, stream >>>(reduce_params);
+    block = ReductionKernel::block_shape();
+    grid = ReductionKernel::grid_shape(reduce_params.problem_size);
+    Kernel<ReductionKernel><<< grid, block, 0, stream >>>(reduce_params);
 
     cudaError_t result = cudaGetLastError();
     if (cudaSuccess == result && Status::kSuccess == launch_result) {

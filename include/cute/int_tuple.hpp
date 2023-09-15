@@ -866,9 +866,9 @@ struct ForwardCoordIterator
 template <class Shape>
 CUTE_HOST_DEVICE constexpr
 auto
-make_coord_iterator(Shape const& shape)
+make_coord_iterator(Shape const& shape, int start=0)
 {
-  auto coord = repeat_like(shape, int(0));
+  auto coord = repeat_like(shape, int(start));
   return ForwardCoordIterator<decltype(coord),Shape>{coord,shape};
 }
 

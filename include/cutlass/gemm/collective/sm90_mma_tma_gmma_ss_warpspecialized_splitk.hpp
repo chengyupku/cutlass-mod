@@ -175,16 +175,12 @@ struct CollectiveMma<
     using TMA_A = decltype(make_tma_copy(
         GmemTiledCopyA{},
         make_tensor(static_cast<InternalElementA const*>(nullptr), repeat_like(StrideA{}, int32_t(0)), StrideA{}),
-        SmemLayoutA{}(_,_,0),
-        make_shape(shape<0>(TileShape{}), shape<2>(TileShape{})),
-        size<1>(ClusterShape{})));  // mcast along N mode for this M load, if any
+        SmemLayoutA{}(_,_,0)));  // mcast along N mode for this M load, if any
     // Assumption: StrideB is congruent with Problem_NK
     using TMA_B = decltype(make_tma_copy(
         GmemTiledCopyB{},
         make_tensor(static_cast<InternalElementB const*>(nullptr), repeat_like(StrideB{}, int32_t(0)), StrideB{}),
-        SmemLayoutB{}(_,_,0),
-        make_shape(shape<1>(TileShape{}), shape<2>(TileShape{})),
-        size<0>(ClusterShape{}))); // mcast along M mode for this N load, if any
+        SmemLayoutB{}(_,_,0))); // mcast along M mode for this N load, if any
     TMA_A tma_load_a;
     TMA_B tma_load_b;
   };
@@ -213,15 +209,11 @@ struct CollectiveMma<
     typename Params::TMA_A tma_load_a = make_tma_copy(
         GmemTiledCopyA{},
         tensor_a,
-        SmemLayoutA{}(_,_,cute::Int<0>{}),
-        make_shape(shape<0>(TileShape{}), shape<2>(TileShape{})),
-        size<1>(ClusterShape{})); // mcast along N mode for this M load, if any
+        SmemLayoutA{}(_,_,cute::Int<0>{})); // mcast along N mode for this M load, if any
     typename Params::TMA_B tma_load_b = make_tma_copy(
         GmemTiledCopyB{},
         tensor_b,
-        SmemLayoutB{}(_,_,cute::Int<0>{}),
-        make_shape(shape<1>(TileShape{}), shape<2>(TileShape{})),
-        size<0>(ClusterShape{})); // mcast along M mode for this N load, if any
+        SmemLayoutB{}(_,_,cute::Int<0>{})); // mcast along M mode for this N load, if any
     return {
       tma_load_a,
       tma_load_b

@@ -202,7 +202,8 @@ public:
 
     typename ThreadEpilogueOp::Params thread{};
     TMA_C tma_load_c;
-    TMA_D tma_store_d;
+    TMA_D tma_store_workspace_0;
+    TMA_D tma_store_workspace_1;
   };
 
   //
@@ -234,16 +235,23 @@ public:
       }
     }();
 
-    Tensor tensor_d = make_tensor(args.ptr_D, make_layout(make_shape(M,N,L), args.dD));
-    typename Params::TMA_D tma_store_d = make_tma_copy(
+    Tensor tensor_workspace_0 = make_tensor(static_cast<ElementD const*>(workspace) + 0 * M * N * L, make_layout(make_shape(M,N,L), args.dD));
+    Tensor tensor_workspace_1 = make_tensor(static_cast<ElementD const*>(workspace) + 1 * M * N * L, make_layout(make_shape(M,N,L), args.dD));
+    typename Params::TMA_D tma_store_workspace_0 = make_tma_copy(
         CopyOpS2G{},
-        tensor_d,
+        tensor_workspace_0,
+        SmemLayoutD{}(_,_,0));
+
+    typename Params::TMA_D tma_store_workspace_1 = make_tma_copy(
+        CopyOpS2G{},
+        tensor_workspace_1,
         SmemLayoutD{}(_,_,0));
 
     return {
       args.thread,
       tma_load_c,
-      tma_store_d
+      tma_store_workspace_0,
+      tma_store_workspace_1
     };
   }
 
@@ -287,7 +295,8 @@ public:
   CUTLASS_DEVICE
   static void prefetch_tma_descriptors(Params const& epilogue_params) {
     cute::prefetch_tma_descriptor(epilogue_params.tma_load_c.get_tma_descriptor());
-    cute::prefetch_tma_descriptor(epilogue_params.tma_store_d.get_tma_descriptor());
+    cute::prefetch_tma_descriptor(epilogue_params.tma_store_workspace_0.get_tma_descriptor());
+    cute::prefetch_tma_descriptor(epilogue_params.tma_store_workspace_1.get_tma_descriptor());
   }
 
   template<
@@ -396,7 +405,10 @@ public:
     auto epi_tile_n = size<1>(EpilogueTileShape{});
 
     // Represent the full output tensor
-    Tensor mD_mnl = params.tma_store_d.get_tma_tensor(make_shape(M,N,L));                                    // (m,n,l)
+    Tensor mD_mnl = params.tma_store_workspace_0.get_tma_tensor(make_shape(M,N,L));                                    // (m,n,l)
+    if (blockIdx.y == 1) {
+      mD_mnl = params.tma_store_workspace_1.get_tma_tensor(make_shape(M,N,L));                                    // (m,n,l)
+    }
     Tensor gD_mnl = local_tile(mD_mnl, tile_shape_MNK, make_coord(_,_,_), Step<_1,_1, X>{});   // (TILE_M,TILE_N,m/TILE_M,n/TILE_N,l)
 
     // Slice to get the tile this CTA is responsible for
@@ -441,7 +453,10 @@ public:
     Tensor tSR_rC = thread_s2r.retile_D(tRS_rC);                                       //             (S2R,S2R_M,S2R_N)
 
     // Partition for smem to gmem copy (tSG_)
-    ThrCopy thrblk_s2g = params.tma_store_d.get_slice(Int<0>{});
+    ThrCopy thrblk_s2g = params.tma_store_workspace_0.get_slice(Int<0>{});
+    if (blockIdx.y == 1) {
+      thrblk_s2g = params.tma_store_workspace_1.get_slice(Int<0>{});
+    }
     Tensor tSG_sD = conditional_return<ReuseSmemC>(
                     thrblk_s2g.partition_S(recast<ElementD>(bEsC)),                    // (S2G,S2G_M,S2G_N,EPI_M,EPI_N)
                     thrblk_s2g.partition_S(bEsD) );                                    //        (S2G,S2G_M,S2G_N,PIPE)
@@ -547,7 +562,12 @@ public:
 
             // Write the tile to gmem from smem with TMA
             if (issue_tma_store) {
-              copy(params.tma_store_d, tSG_sD(_,_,_,epi_m_prev,epi_n_prev), tSG_gD(_,_,_,epi_m_prev,epi_n_prev));
+              if (blockIdx.y == 0) {
+                copy(params.tma_store_workspace_0, tSG_sD(_,_,_,epi_m_prev,epi_n_prev), tSG_gD(_,_,_,epi_m_prev,epi_n_prev));
+              }
+              else if (blockIdx.y == 1) {
+                copy(params.tma_store_workspace_1, tSG_sD(_,_,_,epi_m_prev,epi_n_prev), tSG_gD(_,_,_,epi_m_prev,epi_n_prev));
+              }
             }
           }
 
@@ -568,7 +588,12 @@ public:
 
             // Write the tile to gmem from smem with TMA
             if (issue_tma_store) {
-              copy(params.tma_store_d, tSG_sD(_,_,_,store_pipe_producer_state_prev.index()), tSG_gD(_,_,_,epi_m_prev,epi_n_prev));
+              if (blockIdx.y == 0) {
+                copy(params.tma_store_workspace_0, tSG_sD(_,_,_,store_pipe_producer_state_prev.index()), tSG_gD(_,_,_,epi_m_prev,epi_n_prev));
+              }
+              else if (blockIdx.y == 1) {
+                copy(params.tma_store_workspace_1, tSG_sD(_,_,_,store_pipe_producer_state_prev.index()), tSG_gD(_,_,_,epi_m_prev,epi_n_prev));
+              }
               store_pipeline.producer_commit(store_pipe_producer_state_prev);
             }
           }
@@ -602,7 +627,12 @@ public:
       cutlass::arch::fence_view_async_shared();
       synchronize(); // ensure all threads have issued their async fence
       if (issue_tma_store) {
-        copy(params.tma_store_d, tSG_sD(_,_,_,epi_m_prev,epi_n_prev), tSG_gD(_,_,_,epi_m_prev,epi_n_prev));
+        if (blockIdx.y == 0) {
+          copy(params.tma_store_workspace_0, tSG_sD(_,_,_,epi_m_prev,epi_n_prev), tSG_gD(_,_,_,epi_m_prev,epi_n_prev));
+        }
+        else if (blockIdx.y == 1) {
+          copy(params.tma_store_workspace_1, tSG_sD(_,_,_,epi_m_prev,epi_n_prev), tSG_gD(_,_,_,epi_m_prev,epi_n_prev));
+        }
       }
 
       // Arrive and advance pipeline state
@@ -627,7 +657,12 @@ public:
       cutlass::arch::fence_view_async_shared();
       synchronize(); // ensure all threads have issued their async fence
       if (issue_tma_store) {
-        copy(params.tma_store_d, tSG_sD(_,_,_,store_pipe_producer_state_prev.index()), tSG_gD(_,_,_,epi_m_prev,epi_n_prev));
+        if (blockIdx.y == 0) {
+          copy(params.tma_store_workspace_0, tSG_sD(_,_,_,store_pipe_producer_state_prev.index()), tSG_gD(_,_,_,epi_m_prev,epi_n_prev));
+        }
+        else if (blockIdx.y == 1) {
+          copy(params.tma_store_workspace_1, tSG_sD(_,_,_,store_pipe_producer_state_prev.index()), tSG_gD(_,_,_,epi_m_prev,epi_n_prev));
+        }
         store_pipeline.producer_commit(store_pipe_producer_state_prev);
       }
 

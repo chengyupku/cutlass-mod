@@ -295,11 +295,11 @@ void initialize(const Options &options) {
 typename Gemm::Arguments args_from_options(const Options &options)
 {
   typename Gemm::GemmArguments gemm_arguments{
+    options.split_k_slices,
     cutlass::gemm::GemmUniversalMode::kGemm,
     {options.m, options.n, options.k},
     {block_A.get(), stride_A, block_B.get(), stride_B},
-    {{options.alpha, options.beta}, block_C.get(), stride_C, block_D.get(), stride_D},
-    options.split_k_slices
+    {{options.alpha, options.beta}, block_C.get(), stride_C, block_D.get(), stride_D}
   };
 
   typename Gemm::ReduceArguments reduce_arguments{

@@ -488,7 +488,7 @@ struct CollectiveBuilder<
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-// GMMA_TMA_WS_SS
+// GMMA_TMA_WS_SS_SPLITK
 template <
   class ElementA,
   class GmemLayoutA,
@@ -541,8 +541,8 @@ struct CollectiveBuilder<
   using TiledMma = decltype(cute::make_tiled_mma(cute::GMMA::ss_op_selector<
       MmaElementA, MmaElementB, ElementAccumulator, TileShape_MNK, GmmaMajorA, GmmaMajorB>(), AtomLayoutMNK{}));
 
-  using GmemTiledCopyA = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<1>(ClusterShape_MNK{})));
-  using GmemTiledCopyB = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<0>(ClusterShape_MNK{})));
+  using GmemTiledCopyA = decltype(cute::SM90_TMA_LOAD{});
+  using GmemTiledCopyB = decltype(cute::SM90_TMA_LOAD{});
 
   using SmemLayoutAtomA = decltype(detail::ss_smem_selector<
       GmmaMajorA, MmaElementA, decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
