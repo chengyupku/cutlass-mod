@@ -161,7 +161,7 @@ block0()
 }
 
 #define PRINT_CONDITION(tid) (threadIdx.x == tid && blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0)
-#define PROFILE 1
+#define PROFILE 0
 #define PROFILE_ITER 40
 
 CUTLASS_DEVICE

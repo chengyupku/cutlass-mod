@@ -50,7 +50,9 @@ struct KernelTma { };
 struct KernelTmaWarpSpecialized { };
 struct KernelTmaWarpSpecializedPingpong { };
 struct KernelTmaWarpSpecializedCooperative { };
+struct KernelTmaWarpSpecializedCooperativeSimulate { };
 struct KernelTmaWarpSpecializedCooperativeDSMEM { };
+struct KernelTmaWarpSpecializedCooperativeDSMEMSimulate { };
 
 // Policies for dispatch of epilogue
 struct EpilogueDefault { };
@@ -148,9 +150,33 @@ struct MainloopSm90TmaGmmaWarpSpecialized {
 template<
   int Stages_,
   class ClusterShape_ = Shape<_1,_1,_1>,
+  class KernelSchedule = KernelTmaWarpSpecializedCooperativeSimulate
+>
+struct MainloopSm90TmaGmmaWarpSpecializedSimulate {
+  constexpr static int Stages = Stages_;
+  using ClusterShape = ClusterShape_;
+  using ArchTag = arch::Sm90;
+  using Schedule = KernelSchedule;
+};
+
+template<
+  int Stages_,
+  class ClusterShape_ = Shape<_1,_1,_1>,
   class KernelSchedule = KernelTmaWarpSpecializedCooperativeDSMEM
 >
 struct MainloopSm90TmaGmmaWarpSpecializedDSMEM {
+  constexpr static int Stages = Stages_;
+  using ClusterShape = ClusterShape_;
+  using ArchTag = arch::Sm90;
+  using Schedule = KernelSchedule;
+};
+
+template<
+  int Stages_,
+  class ClusterShape_ = Shape<_1,_1,_1>,
+  class KernelSchedule = KernelTmaWarpSpecializedCooperativeDSMEMSimulate
+>
+struct MainloopSm90TmaGmmaWarpSpecializedDSMEMSimulate {
   constexpr static int Stages = Stages_;
   using ClusterShape = ClusterShape_;
   using ArchTag = arch::Sm90;
