@@ -1,5 +1,7 @@
-# include "cutlass/pipeline/sm90_pipeline.hpp"
+#include "cutlass/pipeline/sm90_pipeline.hpp"
 
+#define eA 0
+#define eB 1
 
 namespace cutlass {
 
@@ -15,6 +17,7 @@ using namespace cute;
 // Currently, it is optional to elect a leader for the Consumers
 template <
   int Stages_,
+  int PatternLen_,
   class ClusterShape_
 >
 class PipelineTmaDsmemAsyncGen {
@@ -26,14 +29,14 @@ public :
   using ProducerBarrierType = FullBarrier::ValueType;
   using ConsumerBarrierType = EmptyBarrier::ValueType;
   static constexpr uint32_t Stages = Stages_;
+  static constexpr uint32_t PatternLen = PatternLen_;
 
   struct SharedStorage {
-    FullBarrier full_barrier_[2][Stages];
-    EmptyBarrier empty_barrier_[Stages];
-    SignalBarrier can_send_barrier_[2];
-    SignalBarrier copy_finish_barrier_[2];
-    FullBarrier dsmem_barrier_[2];
-    SignalBarrier mma_wait_barrier_[Stages];
+    FullBarrier full_barrier_[2][PatternLen];
+    EmptyBarrier empty_barrier_[2][Stages];
+    SignalBarrier can_send_barrier_[2][PatternLen];
+    SignalBarrier copy_finish_barrier_[2][PatternLen];
+    SignalBarrier mma_finish_barrier_[1];
   };
 
   enum class ThreadCategory {
@@ -43,21 +46,11 @@ public :
     ProducerConsumer
   };
 
-  enum class Mat {
-    A,
-    B
-  };
-
   struct Params {
     uint32_t transaction_bytes = 0;
     ThreadCategory role = ThreadCategory::NonParticipant;
     uint32_t is_leader = 0;
     uint32_t num_consumers = 0;
-    uint32_t use_dsmem_copy = 0;
-    uint32_t dsmem_copy_A = 0;
-    uint32_t dsmem_copy_B = 0;
-    uint32_t dsmem_send_stage = 0;
-    uint32_t dsmem_recv_stage = 0;
     uint32_t A_transaction_bytes = 0;
     uint32_t B_transaction_bytes = 0;
   };
@@ -67,11 +60,11 @@ public :
   PipelineTmaDsmemAsyncGen(SharedStorage& storage, Params params)
       : params_(params)
       , full_barrier_ptr_(storage.full_barrier_)
-      , empty_barrier_ptr_(&storage.empty_barrier_[0]) 
-      , can_send_barrier_ptr_(&storage.can_send_barrier_[0])
-      , copy_finish_barrier_ptr_(&storage.copy_finish_barrier_[0])
-      , dsmem_barrier_ptr_(&storage.dsmem_barrier_[0])
-      , mma_wait_barrier_ptr(&storage.mma_wait_barrier_[0]) {
+      , empty_barrier_ptr_(storage.empty_barrier_) 
+      , can_send_barrier_ptr_(storage.can_send_barrier_)
+      , copy_finish_barrier_ptr_(storage.copy_finish_barrier_)
+      , mma_finish_barrier_ptr(storage.mma_finish_barrier_)
+    {
 
     int warp_idx = canonical_warp_idx();
     int lane_predicate = cute::elect_one_sync();
@@ -79,25 +72,28 @@ public :
 
     if (warp_idx == 0 && lane_predicate == 1) {
       // Barrier FULL init
-      for (int i = 0; i < Stages; ++i) {
-        full_barrier_ptr_[0][i].init(1);
-        full_barrier_ptr_[1][i].init(1);
+      for (int i = 0; i < PatternLen; ++i) {
+        full_barrier_ptr_[eA][i].init(1);
+        full_barrier_ptr_[eB][i].init(1);
       }
       // Barrier EMPTY init
       uint32_t const num_consumer_warpgroups_per_cluster = params_.num_consumers / NumThreadsPerWarpGroup;
       uint32_t const multicast_consumer_arrival_count = (cute::size<0>(cluster_shape) + cute::size<1>(cluster_shape) - 1) *
           num_consumer_warpgroups_per_cluster;
       for (int i = 0; i < Stages; ++i) {
-        empty_barrier_ptr_[i].init(num_consumer_warpgroups_per_cluster);
-        mma_wait_barrier_ptr[i].init(1);
+        empty_barrier_ptr_[eA][i].init(num_consumer_warpgroups_per_cluster);
+        empty_barrier_ptr_[eB][i].init(num_consumer_warpgroups_per_cluster);
       }
       // Barrier SIGNAL init
-      can_send_barrier_ptr_[0].init(2);
-      can_send_barrier_ptr_[1].init(2);
-      copy_finish_barrier_ptr_[0].init(1);
-      copy_finish_barrier_ptr_[1].init(1);
-      dsmem_barrier_ptr_[0].init(1);
-      dsmem_barrier_ptr_[1].init(1);
+      for (int i = 0; i < PatternLen; ++i) {
+        copy_finish_barrier_ptr_[eA][i].init(1);
+        copy_finish_barrier_ptr_[eB][i].init(1);
+      }
+      for (int i = 0; i < PatternLen; ++i) {
+        can_send_barrier_ptr_[eA][i].init(2);
+        can_send_barrier_ptr_[eB][i].init(2);
+      }
+      mma_finish_barrier_ptr[0].init(num_consumer_warpgroups_per_cluster * cute::size<0>(cluster_shape) * cute::size<1>(cluster_shape));
     }
 
     // Logic to optimally schedule Empty Arrives
@@ -171,11 +167,23 @@ public :
   }
 
   CUTLASS_DEVICE
-  void producer_acquire(PipelineState<Stages> state, 
-                        uint32_t A_transaction_bytes=0, 
-                        uint32_t B_transaction_bytes=0, 
-                        ProducerToken barrier_token = {BarrierStatus::WaitAgain}) {
-    producer_acquire(state.index(), state.phase(), barrier_token, A_transaction_bytes, B_transaction_bytes);
+  void wait_empty(PipelineState<Stages> state, uint32_t var) {
+    empty_barrier_ptr_[var][state.index()].wait(state.phase());
+  }
+
+  CUTLASS_DEVICE
+  void copy_prepare(PipelineState<PatternLen> state, uint32_t var, uint32_t transaction_bytes = 0) {
+    if (params_.is_leader) {
+      if (transaction_bytes == 0) {
+        if (var == eA) {
+          transaction_bytes = params_.A_transaction_bytes;
+        }
+        else if (var == eB) {
+          transaction_bytes = params_.B_transaction_bytes;
+        }
+      }
+      full_barrier_ptr_[var][state.index()].arrive_and_reset_bytes(transaction_bytes);
+    }
   }
 
 // sender_wait_receiver_ready()     : receiver_arrive_sender()
@@ -183,24 +191,23 @@ public :
 
 
   CUTLASS_DEVICE
-  void receiver_arrive_sender(uint32_t dst_block_id, uint32_t var) {
-    can_send_barrier_ptr_[var].arrive(dst_block_id);
+  void receiver_arrive_sender(uint32_t dst_block_id, uint32_t var, uint32_t stage) {
+    can_send_barrier_ptr_[var][stage].arrive(dst_block_id);
   }
   
   CUTLASS_DEVICE
-  void sender_wait_receiver_ready(uint32_t phase, uint32_t var) {
-    can_send_barrier_ptr_[var].wait(phase);
+  void sender_wait_receiver_ready(uint32_t phase, uint32_t var, uint32_t stage) {
+    can_send_barrier_ptr_[var][stage].wait(phase);
   }
 
   CUTLASS_DEVICE
-  void sender_wait_dsmem_copy_finish(uint32_t phase, uint32_t var) {
-    copy_finish_barrier_ptr_[var].wait(phase);
+  void sender_wait_dsmem_copy_finish(uint32_t phase, uint32_t var, uint32_t stage) {
+    copy_finish_barrier_ptr_[var][stage].wait(phase);
   }
 
   CUTLASS_DEVICE
-  void sender_wait_sender_ready(uint32_t phase, uint32_t var) {
+  void sender_wait_sender_ready(uint32_t phase, uint32_t var, uint32_t stage) {
     uint32_t done;
-    uint32_t stage = params_.dsmem_send_stage;
     done = full_barrier_ptr_[var][stage].test_wait(phase);
     if (not done) {
       full_barrier_ptr_[var][stage].wait(phase);
@@ -208,93 +215,47 @@ public :
   }
   
   CUTLASS_DEVICE
-  void dsmem_copy_prepare(uint32_t transaction_bytes, uint32_t cta_id, uint32_t var) {
-    dsmem_barrier_ptr_[var].arrive_and_reset_bytes(transaction_bytes, cta_id);
+  void dsmem_copy_prepare(uint32_t transaction_bytes, uint32_t cta_id, uint32_t var, uint32_t stage) {
+    full_barrier_ptr_[var][stage].arrive_and_reset_bytes(transaction_bytes, cta_id);
   }
   
   CUTLASS_DEVICE
-  void receiver_wait_dsmem_copy_finish(uint32_t phase, uint32_t var) {
+  void receiver_wait_dsmem_copy_finish(uint32_t phase, uint32_t var, uint32_t stage) {
     // phase may have bug
-    uint32_t done = dsmem_barrier_ptr_[var].test_wait(phase);
+    uint32_t done;
+    done = full_barrier_ptr_[var][stage].test_wait(phase);
     if (not done) {
-      dsmem_barrier_ptr_[var].wait(phase);
-    } 
+      full_barrier_ptr_[var][stage].wait(phase);
+    }
   }
 
   CUTLASS_DEVICE
-  void receiver_arrive_dsmem_copy_finish(uint32_t dst_block_id, uint32_t var) {
-      copy_finish_barrier_ptr_[var].arrive(dst_block_id);
+  void receiver_arrive_dsmem_copy_finish(uint32_t dst_block_id, uint32_t var, uint32_t stage) {
+    copy_finish_barrier_ptr_[var][stage].arrive(dst_block_id);
   }
 
   CUTLASS_DEVICE
-  void mma_wait(uint32_t stage, uint32_t phase) {
-    if (stage == params_.dsmem_recv_stage) {
-      // phase may have bug
-      if (params_.dsmem_copy_A) {
-        uint32_t done = dsmem_barrier_ptr_[0].test_wait(phase);
-        if (not done) {
-          dsmem_barrier_ptr_[0].wait(phase);
-        }
-      }
-      if (params_.dsmem_copy_B) {
-        uint32_t done = dsmem_barrier_ptr_[1].test_wait(phase);
-        if (not done) {
-          dsmem_barrier_ptr_[1].wait(phase);
-        }
-      }
-    }
-    if (stage != params_.dsmem_recv_stage || not params_.dsmem_copy_A) {
-      uint32_t done = full_barrier_ptr_[0][stage].test_wait(phase);
-      if (not done) {
-        full_barrier_ptr_[0][stage].wait(phase);
-      }
-    }
-    if (stage != params_.dsmem_recv_stage || not params_.dsmem_copy_B) {
-      uint32_t done = full_barrier_ptr_[1][stage].test_wait(phase);
-      if (not done) {
-        full_barrier_ptr_[1][stage].wait(phase);
+  void mma_finish() {
+    for (int x = 0; x < cute::size<0>(ClusterShape{}); x++) {
+      for (int y = 0; y < cute::size<1>(ClusterShape{}); y++) {
+        uint32_t block_id = x + y * cute::size<0>(ClusterShape{});
+        mma_finish_barrier_ptr[0].arrive(block_id);
       }
     }
   }
 
   CUTLASS_DEVICE
-  void arrive_mma(uint32_t stage) {
-    mma_wait_barrier_ptr[stage].arrive();
+  void wait_mma_finish(uint32_t phase) {
+    uint32_t done;
+    done = mma_finish_barrier_ptr[0].test_wait(phase);
+    if (not done) {
+      mma_finish_barrier_ptr[0].wait(phase);
+    }
   }
 
   CUTLASS_DEVICE
   void producer_commit(PipelineState<Stages> state, uint32_t bytes) {
     producer_commit(state.index(), bytes);
-  }
-
-  // Prevents early exit of producer blocks in Cluster.
-  // This should be called once before kernel exits.
-  CUTLASS_DEVICE
-  void producer_tail(PipelineState<Stages> state) {
-    for (int count = 0; count < Stages; ++count) {
-      producer_acquire(state);  
-      ++state;
-    }
-  }
-
-  // Prevents early exit of producer blocks in Cluster.
-  // This should be called once before kernel exits.
-  CUTLASS_DEVICE
-  void producer_tail(PipelineState<Stages> state, int& receiver_ready_phase) {
-    for (int count = 0; count < Stages; ++count) {
-      // may have bug
-      producer_acquire(state);  
-      if (params_.use_dsmem_copy && state.index() == params_.dsmem_recv_stage) {
-        if (params_.dsmem_copy_A) {
-          sender_wait_receiver_ready(receiver_ready_phase, 0);
-        }
-        if (params_.dsmem_copy_B) {
-          sender_wait_receiver_ready(receiver_ready_phase, 1);
-        }
-        receiver_ready_phase ^= 1;
-      }
-      ++state;
-    }
   }
 
   CUTLASS_DEVICE
@@ -303,14 +264,10 @@ public :
   }
 
   CUTLASS_DEVICE
-  ProducerBarrierType* producer_get_barrier(PipelineState<Stages> state, uint32_t var) {
+  ProducerBarrierType* producer_get_barrier(PipelineState<PatternLen> state, uint32_t var) {
     return producer_get_barrier(state.index(), var);
   }
 
-  CUTLASS_DEVICE
-  ProducerBarrierType* producer_get_dsmem_barrier(uint32_t var) {
-    return producer_get_dsmem_barrier_detail(var);
-  }
 
   ////////////////////
   // Consumer APIs
@@ -321,21 +278,13 @@ public :
   }
 
   CUTLASS_DEVICE
-  void consumer_wait(PipelineState<Stages> state) {
+  void consumer_wait(PipelineState<PatternLen> state) {
     consumer_wait(state.index(), state.phase());
   }
 
-  // CUTLASS_DEVICE
-  // void consumer_wait_by_stage(uint32_t stage, uint32_t phase) {
-  //   uint32_t done = full_barrier_ptr_[stage].test_wait(phase);
-  //   if (not done) {
-  //     full_barrier_ptr_[stage].wait(phase);
-  //   }
-  // }
-
   CUTLASS_DEVICE
-  void consumer_release(PipelineState<Stages> state) {
-    consumer_release(state.index());
+  void consumer_release(PipelineState<Stages> state, uint32_t var) {
+    consumer_release(state.index(), var);
   }
 
   CUTLASS_DEVICE
@@ -346,12 +295,11 @@ public :
 private :
   uint32_t dst_blockid_ = 0;
   uint32_t is_signalling_thread_ = 0;
-  FullBarrier (*full_barrier_ptr_)[4] = nullptr;
-  EmptyBarrier *empty_barrier_ptr_ = nullptr;
-  SignalBarrier *can_send_barrier_ptr_ = nullptr;
-  SignalBarrier *copy_finish_barrier_ptr_ = nullptr;
-  FullBarrier *dsmem_barrier_ptr_ = nullptr;
-  SignalBarrier *mma_wait_barrier_ptr = nullptr;
+  FullBarrier (*full_barrier_ptr_)[PatternLen] = nullptr;
+  EmptyBarrier (*empty_barrier_ptr_)[Stages] = nullptr;
+  SignalBarrier (*can_send_barrier_ptr_)[PatternLen] = nullptr;
+  SignalBarrier (*copy_finish_barrier_ptr_)[PatternLen] = nullptr;
+  SignalBarrier (*mma_finish_barrier_ptr) = nullptr;
   Params params_;
 
   CUTLASS_DEVICE
@@ -363,121 +311,26 @@ private :
     return {static_cast<BarrierStatus>(barrier_status)};
   }
 
-  CUTLASS_DEVICE
-  void producer_acquire(uint32_t stage, uint32_t phase, ProducerToken barrier_token, 
-                        uint32_t A_transaction_bytes=0, uint32_t B_transaction_bytes=0) {
-    if (barrier_token == BarrierStatus::WaitAgain) {
-      empty_barrier_ptr_[stage].wait(phase);
-    }
-
-    if (params_.is_leader) {
-      if (A_transaction_bytes == 0) {
-        A_transaction_bytes = params_.A_transaction_bytes;
-      }
-      if (B_transaction_bytes == 0) {
-        B_transaction_bytes = params_.B_transaction_bytes;
-      }
-      if (stage != params_.dsmem_recv_stage || not params_.dsmem_copy_A) {
-        full_barrier_ptr_[0][stage].arrive_and_reset_bytes(A_transaction_bytes);
-      }
-      if (stage != params_.dsmem_recv_stage || not params_.dsmem_copy_B) {
-        full_barrier_ptr_[1][stage].arrive_and_reset_bytes(B_transaction_bytes);      
-      }
-    }
-    #ifndef NDEBUG
-    if (params_.role == ThreadCategory::Consumer || params_.role == ThreadCategory::NonParticipant) {
-      asm volatile ("brkpt;\n" ::);
-    }
-
-    // Most likely you have elected more than one leader
-    if (params_.is_leader && (threadIdx.x % 32 != 0)) {
-      asm volatile ("brkpt;\n" ::);
-    }
-    #endif
-  }
-
-  // NOP for TMA based mainloop
-  CUTLASS_DEVICE
-  void producer_commit(uint32_t stage, uint32_t bytes) {
-    // Below code is used only for unit-testing (in the absence of TMA commit)
-    #if CUTLASS_UNIT_TEST_PIPELINE
-      if (params_.is_leader) {
-        // STEP 1 : Commit to self
-        full_barrier_ptr_[stage].commit(bytes);
-
-        // STEP 2 : Commit to other blocks in our cluster
-        auto cluster_shape = ClusterShape{};
-        Layout block_layout_in_cluster = make_layout(cluster_shape);
-        dim3 local_block_id = cute::block_id_in_cluster();
-
-        CUTLASS_PRAGMA_UNROLL
-        for(int n = 0; n < size<1>(block_layout_in_cluster); ++n) {
-          uint32_t dst_block_id = block_layout_in_cluster(local_block_id.x,n,Int<0>{});
-          full_barrier_ptr_[stage].commit(dst_block_id, bytes, n!=local_block_id.y);
-        }
-
-        CUTLASS_PRAGMA_UNROLL
-        for(int m = 0; m < size<0>(block_layout_in_cluster); ++m) {
-          uint32_t dst_block_id = block_layout_in_cluster(m,local_block_id.y,Int<0>{});
-          full_barrier_ptr_[stage].commit(dst_block_id, bytes, m!=local_block_id.x);
-        }
-      }
-    #endif
-  }
-
-  CUTLASS_DEVICE
-  ConsumerToken consumer_try_wait(uint32_t stage, uint32_t phase, uint32_t var, uint32_t skip_wait) {
-    if (skip_wait) {
-      return {BarrierStatus::WaitDone};
-    }
-    uint32_t barrier_status = full_barrier_ptr_[var][stage].try_wait(phase);
-    return {static_cast<BarrierStatus>(barrier_status)};
-  }
-
   // Wait for producer to commit transactions (done by TMA)
   CUTLASS_DEVICE
   void consumer_wait(uint32_t stage, uint32_t phase) {
-    if (stage == params_.dsmem_recv_stage) {
-      // phase may have bug
-      if (params_.dsmem_copy_A) {
-        uint32_t done = dsmem_barrier_ptr_[0].test_wait(phase);
-        if (not done) {
-          dsmem_barrier_ptr_[0].wait(phase);
-        }
-      }
-      if (params_.dsmem_copy_B) {
-        uint32_t done = dsmem_barrier_ptr_[1].test_wait(phase);
-        if (not done) {
-          dsmem_barrier_ptr_[1].wait(phase);
-        }
-      }
-      if (not params_.dsmem_copy_A) {
-        uint32_t done = full_barrier_ptr_[0][stage].test_wait(phase);
-        if (not done) {
-          full_barrier_ptr_[0][stage].wait(phase);
-        }
-      }
-      if (not params_.dsmem_copy_B) {
-        uint32_t done = full_barrier_ptr_[1][stage].test_wait(phase);
-        if (not done) {
-          full_barrier_ptr_[1][stage].wait(phase);
-        }
-      }
+    uint32_t done;
+    done = full_barrier_ptr_[eA][stage].test_wait(phase);
+    if (not done) {
+      full_barrier_ptr_[eA][stage].wait(phase);
     }
-    else {
-      uint32_t done = mma_wait_barrier_ptr[stage].test_wait(phase);
-      if (not done) {
-        mma_wait_barrier_ptr[stage].wait(phase);
-      }
+    done = full_barrier_ptr_[eB][stage].test_wait(phase);
+    if (not done) {
+      full_barrier_ptr_[eB][stage].wait(phase);
     }
   }
 
   // Consumer signalling Producer of completion
   // Ensures all blocks in the Same Row and Column get notifed.
   CUTLASS_DEVICE
-  void consumer_release(uint32_t stage, uint32_t skip = false) {
+  void consumer_release(uint32_t stage, uint32_t var, uint32_t skip = false) {
     if (threadIdx.x==128 || threadIdx.x==256) {
-      empty_barrier_ptr_[stage].arrive();
+      empty_barrier_ptr_[var][stage].arrive();
     }
     #ifndef NDEBUG
     if (params_.role == ThreadCategory::Producer || params_.role == ThreadCategory::NonParticipant) {
@@ -489,11 +342,6 @@ private :
   CUTLASS_DEVICE
   ProducerBarrierType* producer_get_barrier(uint32_t stage, uint32_t var) {
     return reinterpret_cast<ProducerBarrierType*>(&full_barrier_ptr_[var][stage]);
-  }
-
-  CUTLASS_DEVICE
-  ProducerBarrierType* producer_get_dsmem_barrier_detail(uint32_t var) {
-    return reinterpret_cast<ProducerBarrierType*>(&dsmem_barrier_ptr_[var]);
   }
 };
 

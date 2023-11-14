@@ -341,4 +341,42 @@ dsmem_copy( ClusterShape cluster_shape,
       );
 }
 
+__device__ void
+dsmem_copy_func(uint32_t block_id,
+                void const* const src_ptr, 
+                void const* const dst_ptr, 
+                void const* const mbar_ptr, 
+                uint32_t transaction_bytes)
+{
+  uint32_t src_int_addr = cast_smem_ptr_to_uint(src_ptr);
+  uint32_t smem_int_mbar = set_block_rank(cast_smem_ptr_to_uint(mbar_ptr), block_id);
+  uint32_t remote_addr = set_block_rank(cast_smem_ptr_to_uint(dst_ptr), block_id);
+
+  asm volatile (
+          "cp.async.bulk.shared::cluster.shared::cta.mbarrier::complete_tx::bytes"
+          " [%0], [%1], %2, [%3];"
+          :
+          : "r"(remote_addr), "r"(src_int_addr), "r"(transaction_bytes), "r"(smem_int_mbar)
+          : "memory"
+      );
+}
+
+__device__ void
+gmem2cta_copy_kernel( void const* gmem_ptr, 
+                      void const* dst_ptr, 
+                      void const* mbarr_ptr,
+                      uint32_t transaction_bytes
+                    )
+{
+  uint32_t dst_int_addr = cast_smem_ptr_to_uint(dst_ptr);
+  uint32_t mbarr_addr = cast_smem_ptr_to_uint(mbarr_ptr);
+  asm volatile (
+      "cp.async.bulk.shared::cluster.global.mbarrier::complete_tx::bytes"
+      " [%0], [%1], %2, [%3];"
+      :
+      : "r"(dst_int_addr), "l"(gmem_ptr), "r"(transaction_bytes), "r"(mbarr_addr)
+      : "memory"
+  );
+}
+
 } // end namespace cute

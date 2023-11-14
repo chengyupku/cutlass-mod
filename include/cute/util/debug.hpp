@@ -163,6 +163,8 @@ block0()
 #define PRINT_CONDITION(tid) (threadIdx.x == tid && blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0)
 #define PROFILE 0
 #define PROFILE_ITER 40
+#define SIMULATE_MULTIPLE 9
+#define SM_COUNT 132
 
 CUTLASS_DEVICE
 uint64_t 

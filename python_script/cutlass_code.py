@@ -1,136 +1,4 @@
-
-#include <iostream>
-
-#include "cutlass/cutlass.h"
-
-#include "cute/tensor.hpp"
-#include "cutlass/tensor_ref.h"
-#include "cutlass/epilogue/collective/default_epilogue.hpp"
-#include "cutlass/epilogue/thread/linear_combination.h"
-#include "cutlass/gemm/dispatch_policy.hpp"
-#include "cutlass/gemm/collective/collective_builder.hpp"
-#include "cutlass/epilogue/collective/collective_builder.hpp"
-#include "cutlass/gemm/device/gemm_universal_adapter.h"
-#include "cutlass/gemm/kernel/gemm_universal.hpp"
-
-#include "cutlass/util/command_line.h"
-#include "cutlass/util/distribution.h"
-#include "cutlass/util/host_tensor.h"
-#include "cutlass/util/packed_stride.hpp"
-#include "cutlass/util/tensor_view_io.h"
-#include "cutlass/util/reference/device/gemm.h"
-#include "cutlass/util/reference/device/tensor_compare.h"
-#include "cutlass/util/reference/device/tensor_fill.h"
-
-#include "cutlass/arch/mma.h"
-#include "cutlass/gemm/gemm.h"
-#include "cute/atom/mma_traits_sm90_gmma.hpp"
-#include "cute/atom/copy_traits_sm90_tma.hpp"
-
-#include "cute/arch/cluster_sm90.hpp"
-#include "cute/arch/copy_sm90.hpp"
-
-#include "cute/algorithm/functional.hpp"
-#include "cute/atom/mma_atom.hpp"
-#include "cute/algorithm/gemm.hpp"
-#include "cute/tensor_predicate.hpp"
-#include "cute/numeric/arithmetic_tuple.hpp"
-#include "cutlass/pipeline/pipeline.hpp"
-
-#include "async_pipeline.hpp"
-#include "gemm_kernel.hpp"
-
-#include "helper.h"
-
-#define TEST_CORRECTNESS 0
-#define TEST_ROUND 10000
-
-using namespace cute;
-
-#if defined(CUTLASS_ARCH_MMA_SM90_SUPPORTED)
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-/// GEMM kernel configurations
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-// A matrix configuration
-using         ElementA    = cutlass::half_t;                                // Element type for A matrix operand
-using         LayoutA     = cutlass::layout::ColumnMajor;                      // Layout type for A matrix operand
-constexpr int AlignmentA  = 128 / cutlass::sizeof_bits<ElementA>::value;    // Memory access granularity/alignment of A matrix in units of elements (up to 16 bytes)
-
-// B matrix configuration
-using         ElementB    = cutlass::half_t;                                // Element type for B matrix operand
-using         LayoutB     = cutlass::layout::RowMajor;                   // Layout type for B matrix operand
-constexpr int AlignmentB  = 128 / cutlass::sizeof_bits<ElementB>::value;    // Memory access granularity/alignment of B matrix in units of elements (up to 16 bytes)
-
-// C/D matrix configuration
-using         ElementC    = cutlass::half_t;                                // Element type for C and D matrix operands
-using         LayoutC     = cutlass::layout::ColumnMajor;                   // Layout type for C and D matrix operands
-constexpr int AlignmentC  = 128 / cutlass::sizeof_bits<ElementC>::value;    // Memory access granularity/alignment of C matrix in units of elements (up to 16 bytes)
-
-// Core kernel configurations
-using ElementAccumulator  = float;                                          // Element type for internal accumulation
-using ArchTag             = cutlass::arch::Sm90;                            // Tag indicating the minimum SM that supports the intended feature
-using OperatorClass       = cutlass::arch::OpClassTensorOp;                 // Operator class tag
-using TileShape           = Shape<_128,_256,_64>;                           // Threadblock-level tile size
-using ClusterShape        = Shape<_2,_2,_1>;                                // Shape of the threadblocks in a cluster
-using StageCountType = cutlass::gemm::collective::StageCountAuto;           // Stage count maximized based on the tile size
-using KernelSchedule = cutlass::gemm::collective::KernelScheduleAuto;       // Kernel to launch based on the default setting in the Collective Builder 
-
-using CollectiveEpilogue = typename cutlass::epilogue::collective::CollectiveBuilder<
-    cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp,
-    TileShape, ClusterShape,
-    cutlass::epilogue::collective::EpilogueTileAuto,
-    ElementAccumulator, ElementAccumulator,
-    ElementC, LayoutC, AlignmentC,
-    ElementC, LayoutC, AlignmentC,
-    cutlass::epilogue::TmaWarpSpecializedCooperative
-  >::CollectiveOp;
-
-static_assert(is_static<TileShape>::value);
-static_assert(is_static<ClusterShape>::value);
-static_assert(cutlass::gemm::collective::detail::is_aligned<ElementA, AlignmentA, ElementB, AlignmentB, cutlass::gemm::collective::detail::tma_alignment_bytes>(),
-            "Should meet TMA alignment requirement\n");
-
-// For fp32 types, map to tf32 MMA value type
-using MmaElementA = cute::conditional_t<cute::is_same_v<ElementA, float>, tfloat32_t, ElementA>;
-using MmaElementB = cute::conditional_t<cute::is_same_v<ElementB, float>, tfloat32_t, ElementB>;
-
-static constexpr cute::GMMA::Major GmmaMajorA = cutlass::gemm::collective::detail::gmma_ss_tag_to_major_A<MmaElementA, LayoutA>();
-static constexpr cute::GMMA::Major GmmaMajorB = cutlass::gemm::collective::detail::gmma_ss_tag_to_major_B<MmaElementB, LayoutB>();
-
-using AtomLayoutMNK =
-    Layout<Shape<_2,_1,_1>>;
-
-using TiledMma = decltype(cute::make_tiled_mma(cute::GMMA::ss_op_selector<
-    MmaElementA, MmaElementB, ElementAccumulator, TileShape, GmmaMajorA, GmmaMajorB>(), AtomLayoutMNK{}));
-
-// force not to use TMA multicast 
-using GmemTiledCopyA = decltype(cute::SM90_TMA_LOAD{});
-using GmemTiledCopyB = decltype(cute::SM90_TMA_LOAD{});
-
-using SmemLayoutAtomA = decltype(cutlass::gemm::collective::detail::ss_smem_selector<
-    GmmaMajorA, MmaElementA, decltype(cute::get<0>(TileShape{})), decltype(cute::get<2>(TileShape{}))>());
-using SmemLayoutAtomB = decltype(cutlass::gemm::collective::detail::ss_smem_selector<
-    GmmaMajorB, MmaElementB, decltype(cute::get<1>(TileShape{})), decltype(cute::get<2>(TileShape{}))>());
-
-static constexpr int PipelineStages = cutlass::gemm::collective::detail::compute_stage_count_or_override<cutlass::gemm::collective::detail::sm90_smem_capacity_bytes,
-    MmaElementA, MmaElementB, TileShape>(cutlass::gemm::collective::StageCountAutoCarveout<
-    sizeof(typename CollectiveEpilogue::SharedStorage)>{});
-
-static constexpr int PatternLen = 8;
-
-using DispatchPolicy = cutlass::gemm::MainloopSm90TmaGmmaWarpSpecializedDSMEM<
-    PipelineStages, ClusterShape, cutlass::gemm::KernelTmaWarpSpecializedCooperativeDSMEM>;
-
-using SmemCopyAtomA = void; 
-using SmemCopyAtomB = void;
-
-struct block_iter_id {
-  int8_t x, y, iter;
-};
-
-
+collective_header = """
 /////////////////////////////////////////////////////////////////////////////////////////////////
 /// GEMM collective code
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -143,7 +11,6 @@ using namespace cute;
 // WarpSpecialized Mainloop
 template <
   int Stages,
-  int PatternLen_,
   class ClusterShape,
   class KernelSchedule,
   class TileShape_,
@@ -183,14 +50,10 @@ struct CollectiveMmaGen
   using TransformB = TransformB_;
   using ArchTag = typename DispatchPolicy::ArchTag;
 
-  static const int PatternLen = PatternLen_;
-  
   using MainloopPipeline = cutlass::PipelineTmaDsmemAsyncGen<
                              DispatchPolicy::Stages,
-                             PatternLen,
                              typename DispatchPolicy::ClusterShape>;
-  using PhysicalPipelineState = cutlass::PipelineState<DispatchPolicy::Stages>;
-  using LogicalPipelineState = cutlass::PipelineState<PatternLen>;
+  using PipelineState = cutlass::PipelineState<DispatchPolicy::Stages>;
 
   using PipelineParams = typename MainloopPipeline::Params;
 
@@ -228,82 +91,9 @@ struct CollectiveMmaGen
   static constexpr bool ConvertF32toTF32B = cute::is_same_v<float, ElementB>;
   using InternalElementA = cute::conditional_t<ConvertF32toTF32A, tfloat32_t, uint_bit_t<sizeof_bits_v<ElementA>>>;
   using InternalElementB = cute::conditional_t<ConvertF32toTF32B, tfloat32_t, uint_bit_t<sizeof_bits_v<ElementB>>>;
+"""
 
-	int8_t tile_order[2][4][PatternLen] = {
-    {
-      {0, 1, 2, 3, 4, 5, 6, 7},
-      {1, 0, 2, 3, 4, 5, 6, 7},
-      {0, 1, 2, 3, 4, 5, 6, 7},
-      {1, 0, 2, 3, 4, 5, 6, 7},
-    },
-    {
-      {1, 0, 2, 3, 4, 5, 6, 7},
-      {0, 1, 2, 3, 4, 5, 6, 7},
-      {1, 0, 2, 3, 4, 5, 6, 7},
-      {0, 1, 2, 3, 4, 5, 6, 7},
-    },
-  };
-  block_iter_id src_A[2][4][PatternLen] = {
-    {
-      {{-1, -1, -1},{0, 1, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{-1, -1, -1},{0, 0, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{-1, -1, -1},{0, 3, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{-1, -1, -1},{0, 2, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-    },
-    {
-      {{-1, -1, -1},{1, 1, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{-1, -1, -1},{1, 0, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{-1, -1, -1},{1, 3, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{-1, -1, -1},{1, 2, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-    },
-  };
-
-  block_iter_id src_B[2][4][PatternLen] = {
-    {
-      {{-1, -1, -1},{1, 0, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{-1, -1, -1},{1, 1, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{-1, -1, -1},{1, 2, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{-1, -1, -1},{1, 3, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-    },
-    {
-      {{-1, -1, -1},{0, 0, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{-1, -1, -1},{0, 1, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{-1, -1, -1},{0, 2, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{-1, -1, -1},{0, 3, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-    },
-  };
-
-  block_iter_id dst_A[2][4][PatternLen] = {
-    {
-      {{0, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{0, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{0, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{0, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-    },
-    {
-      {{1, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{1, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{1, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{1, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-    },
-  };
-
-  block_iter_id dst_B[2][4][PatternLen] = {
-   {
-      {{1, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{1, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{1, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{1, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-    },
-    {
-      {{0, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{0, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{0, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-      {{0, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-    },
-  };
-
-
+collective_middle = """
   struct SharedStorage
   {
     struct TensorStorage : cute::aligned_struct<128> {
@@ -391,8 +181,9 @@ struct CollectiveMmaGen
     cute::prefetch_tma_descriptor(mainloop_params.tma_load_a.get_tma_descriptor());
     cute::prefetch_tma_descriptor(mainloop_params.tma_load_b.get_tma_descriptor());
   }
+"""
 
-
+collective_load = """
 /// Perform a collective-scoped matrix multiply-accumulate
   /// Producer Perspective
   template <
@@ -403,8 +194,7 @@ struct CollectiveMmaGen
   CUTLASS_DEVICE void
   load(
       MainloopPipeline pipeline, 
-      PhysicalPipelineState smem_pipe_write_physical,
-      LogicalPipelineState smem_pipe_write_logical,
+      PipelineState smem_pipe_write,
       TensorA const& gA, TMA_LOAD_A& tma_load_a,
       TensorB const& gB, TMA_LOAD_B& tma_load_b,
       KTileIterator k_tile_iter, int k_tile_count,
@@ -422,7 +212,6 @@ struct CollectiveMmaGen
     int warp_idx_in_warp_group  = warp_idx % 4;
     int lane_predicate = cute::elect_one_sync();
     auto pipeline_params = pipeline.get_params();
-
 
     if (warp_idx_in_warp_group == 0 and lane_predicate) {
       Tensor sA = make_tensor(make_smem_ptr(shared_tensors.smem_A.data()), SmemLayoutA{});        // (BLK_M,BLK_K,PIPE)
@@ -448,54 +237,49 @@ struct CollectiveMmaGen
       uint16_t mcast_mask_b = 0;
 
       int k_iter = 0;
-
-
+      int order[4] = {3, 1, 2, 0};
 
       // Mainloop
       CUTLASS_PRAGMA_NO_UNROLL
       for ( ; k_tile_count > 0; --k_tile_count)
       {
-        int write_stage = smem_pipe_write_physical.index();
-        block_iter_id src_id_A = src_A[bid.x][bid.y][k_iter % PatternLen];
-        block_iter_id src_id_B = src_B[bid.x][bid.y][k_iter % PatternLen];
-        // LOCK smem_pipe_write_physical for _writing_
-        pipeline.wait_empty(smem_pipe_write_physical, eA);
-        pipeline.wait_empty(smem_pipe_write_physical, eB);
+        int write_stage = smem_pipe_write.index();
 
-        if (src_id_A.x == -1 || src_id_A.y == -1) {
-          pipeline.copy_prepare(smem_pipe_write_logical, eA);
-        }
-        if (src_id_B.x == -1 || src_id_B.y == -1) {
-          pipeline.copy_prepare(smem_pipe_write_logical, eB);
-        }
+        // LOCK smem_pipe_write for _writing_
+        pipeline.producer_acquire(smem_pipe_write);
 
         //
         // Copy gmem to smem for *k_tile_iter
         //
 
         using BarrierType = typename MainloopPipeline::ProducerBarrierType;
-        BarrierType* tma_A_barrier = pipeline.producer_get_barrier(smem_pipe_write_logical, eA);
-        BarrierType* tma_B_barrier = pipeline.producer_get_barrier(smem_pipe_write_logical, eB);
+        BarrierType* tma_A_barrier = pipeline.producer_get_barrier(smem_pipe_write, 0);
+        BarrierType* tma_B_barrier = pipeline.producer_get_barrier(smem_pipe_write, 1);
 
-        int k_tile_iter_AB = k_iter / PatternLen + tile_order[bid.x][bid.y][k_iter % PatternLen];
+        int k_tile_iter_AB;
+        if (bid.y == 0) {
+          k_tile_iter_AB = k_iter;
+        }
+        else {
+          k_tile_iter_AB = (k_iter / 4) * 4 + order[k_iter % 4];
+        }
 
-        // Check if this stage was sender on iteration (k_iter - K_PIPE_MAX)
-        // If true, wait until the copy is done
-        if ((k_iter - K_PIPE_MAX >= 0) && 
-           (dst_A[bid.x][bid.y][(k_iter - K_PIPE_MAX) % PatternLen].x != -1 && 
-            dst_A[bid.x][bid.y][(k_iter - K_PIPE_MAX) % PatternLen].y != -1)) {
-          pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eA, k_iter % PatternLen);
+        // to optimize
+        if (write_stage == pipeline_params.dsmem_send_stage)
+        {
+          if (pipeline_params.dsmem_copy_A) {
+            pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, 0);
+          }
+          if (pipeline_params.dsmem_copy_B) {
+            pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, 1);
+          }
+          sender_dsmem_copy_finish_phase ^= 1;
         }
-        if ((k_iter - K_PIPE_MAX >= 0) && 
-           (dst_B[bid.x][bid.y][(k_iter - K_PIPE_MAX) % PatternLen].x != -1 && 
-            dst_B[bid.x][bid.y][(k_iter - K_PIPE_MAX) % PatternLen].y != -1)) {
-          pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eB, k_iter % PatternLen);
-        }
-        if (src_id_A.x == -1 || src_id_A.y == -1) {
+        if (write_stage != pipeline_params.dsmem_recv_stage || (not pipeline_params.dsmem_copy_A)) {
           // TMA load A from gmem to smem
           copy(tma_load_a.with(*tma_A_barrier, mcast_mask_a), tAgA(_,_,_,k_tile_iter_AB), tAsA(_,_,_,write_stage));
         }
-        if (src_id_B.x == -1 || src_id_B.y == -1) {
+        if (write_stage != pipeline_params.dsmem_recv_stage || (not pipeline_params.dsmem_copy_B)) {
           // TMA load B from gmem to smem
           copy(tma_load_b.with(*tma_B_barrier, mcast_mask_b), tBgB(_,_,_,k_tile_iter_AB), tBsB(_,_,_,write_stage));
         }
@@ -503,13 +287,8 @@ struct CollectiveMmaGen
         ++k_tile_iter;
         ++k_iter;
 
-        // Advance smem_pipe_write_physical
-        ++smem_pipe_write_physical;
-        ++smem_pipe_write_logical;
-
-        if (k_iter % PatternLen == 0) {
-          sender_dsmem_copy_finish_phase ^= 1;
-        }
+        // Advance smem_pipe_write
+        ++smem_pipe_write;
       }
     }
 
@@ -532,87 +311,114 @@ struct CollectiveMmaGen
       // assert(k_tile_count % size<0>(ClusterShape{}) == 0 && k_tile_count % size<1>(ClusterShape{}) == 0; "cluster shape not aligned!");
       
       int k_iter = 0;
+      int k_dsmem_tile_count = k_tile_count / K_PIPE_MAX;
 
       // Mainloop
       CUTLASS_PRAGMA_NO_UNROLL
-      for ( ; k_tile_count > 0; --k_tile_count)
+      for ( ; k_dsmem_tile_count > 0; --k_dsmem_tile_count)
       {
-        using BarrierType = typename MainloopPipeline::ProducerBarrierType;
-        block_iter_id dst_id_A = dst_A[bid.x][bid.y][k_iter % PatternLen];
-        block_iter_id dst_id_B = dst_B[bid.x][bid.y][k_iter % PatternLen];
-        int dst_A_stage = dst_id_A.iter % K_PIPE_MAX;
-        int dst_B_stage = dst_id_B.iter % K_PIPE_MAX;
-
         // wait receiver's arrive
-        if (dst_id_A.x != -1 && dst_id_A.y != -1) {
+        if (pipeline_params.dsmem_copy_A) {
           // wait sender buffer ready, may have bug (double consumer wait?)
-          pipeline.sender_wait_sender_ready(sender_ready_phase, eA, k_iter % PatternLen);
-          pipeline.sender_wait_receiver_ready(receiver_ready_phase, eA, k_iter % PatternLen);
-          uint32_t block_id = dst_id_A.x + dst_id_A.y * size<0>(ClusterShape{});
-          pipeline.dsmem_copy_prepare(TransactionBytesA, block_id, eA, dst_id_A.iter % PatternLen);
-          BarrierType* tma_A_barrier = pipeline.producer_get_barrier_by_stage(dst_id_A.iter % PatternLen, eA);
-          dsmem_copy_func(block_id,
-                          tAsA(_,_,_,k_iter % K_PIPE_MAX).data().get(), 
-                          tAsA(_,_,_,dst_A_stage).data().get(), 
-                          tma_A_barrier, 
-                          TransactionBytesA
-                          );
+          pipeline.sender_wait_sender_ready(sender_ready_phase, 0);
+          // to optimize
+          pipeline.sender_wait_receiver_ready(receiver_ready_phase, 0);
         }
-        if (dst_id_B.x != -1 && dst_id_B.y != -1) {
+        if (pipeline_params.dsmem_copy_B) {
           // wait sender buffer ready, may have bug (double consumer wait?)
-          pipeline.sender_wait_sender_ready(sender_ready_phase, eB, k_iter % PatternLen);
-          pipeline.sender_wait_receiver_ready(receiver_ready_phase, eB, k_iter % PatternLen);
-          uint32_t block_id = dst_id_B.x + dst_id_B.y * size<0>(ClusterShape{});
-          pipeline.dsmem_copy_prepare(TransactionBytesB, block_id, eB, dst_id_B.iter % PatternLen);
-          BarrierType* tma_B_barrier = pipeline.producer_get_barrier_by_stage(dst_id_B.iter % PatternLen, eB);
-          dsmem_copy_func(block_id,
-                          tBsB(_,_,_,k_iter % K_PIPE_MAX).data().get(), 
-                          tBsB(_,_,_,dst_B_stage).data().get(), 
-                          tma_B_barrier, 
-                          TransactionBytesB
-                          );
+          pipeline.sender_wait_sender_ready(sender_ready_phase, 1);
+          // to optimize
+          pipeline.sender_wait_receiver_ready(receiver_ready_phase, 1);
         }
 
+        receiver_ready_phase ^= 1;
+        sender_ready_phase ^= 1;
+
+        //
+        // Copy gmem to smem for *k_tile_iter
+        //
+        uint32_t dst_id = 0;
+        using BarrierType = typename MainloopPipeline::ProducerBarrierType;
+        // not support dsmem copy both A and B
+        if (pipeline_params.dsmem_copy_A) {
+          dst_id = (bid.y + 1) % size<1>(ClusterShape{});
+          pipeline.dsmem_copy_prepare(TransactionBytesA, dst_id, 0);
+          BarrierType* dsmem_barrier = pipeline.producer_get_dsmem_barrier(0);
+          dsmem_copy( ClusterShape{}, 
+                      bid,  
+                      tAsA(_,_,_,pipeline_params.dsmem_send_stage).data().get(), 
+                      tAsA(_,_,_,pipeline_params.dsmem_recv_stage).data().get(), 
+                      dsmem_barrier, 
+                      TransactionBytesA,
+                      0);
+        }
+        if (pipeline_params.dsmem_copy_B) {
+          dst_id = (bid.x + 1) % size<0>(ClusterShape{});
+          pipeline.dsmem_copy_prepare(TransactionBytesB, dst_id, 1);
+          BarrierType* dsmem_barrier = pipeline.producer_get_dsmem_barrier(1);
+          dsmem_copy( ClusterShape{}, 
+                      bid,  
+                      tBsB(_,_,_,pipeline_params.dsmem_send_stage).data().get(), 
+                      tBsB(_,_,_,pipeline_params.dsmem_recv_stage).data().get(), 
+                      dsmem_barrier, 
+                      TransactionBytesB,
+                      1);
+        }
+        
         ++k_tile_iter;
         ++k_iter;
-        if (k_iter % PatternLen == 0) {
-          receiver_ready_phase ^= 1;
-          sender_ready_phase ^= 1;
-        }
       }
     }
 
     // monitor dsmem copy of A
-    if (warp_idx_in_warp_group == 2 and lane_predicate) {
+    if (warp_idx_in_warp_group == 2 and lane_predicate and pipeline_params.dsmem_copy_A) {
+      int k_dsmem_tile_count = k_tile_count / K_PIPE_MAX;
       dim3 bid = cute::block_id_in_cluster();
-      int k_iter = 0;
+      uint32_t src_A_block = bid.y == 0 ?
+                              size<1>(ClusterShape{}) - 1 :
+                              bid.y - 1;
+
       CUTLASS_PRAGMA_NO_UNROLL
-      for ( ; k_tile_count > 0; --k_tile_count) {
-        block_iter_id src_id_A = src_A[bid.x][bid.y][k_iter % PatternLen];
-        block_iter_id src_id_B = src_B[bid.x][bid.y][k_iter % PatternLen];
-        // Copy on this iteration is from dsmem
-        if (src_id_A.x != -1 && src_id_A.y != -1) {
-          uint32_t block_id = src_id_A.x + src_id_A.y * size<0>(ClusterShape{});
-          pipeline.receiver_wait_dsmem_copy_finish(receiver_dsmem_copy_finish_phase, eA, k_iter % PatternLen);
-          pipeline.receiver_arrive_dsmem_copy_finish(block_id, eA, (src_id_A.iter + K_PIPE_MAX) % PatternLen);
-        }
-        if (src_id_B.x != -1 && src_id_B.y != -1) {
-          uint32_t block_id = src_id_B.x + src_id_B.y * size<0>(ClusterShape{});
-          pipeline.receiver_wait_dsmem_copy_finish(receiver_dsmem_copy_finish_phase, eB, k_iter % PatternLen);
-          pipeline.receiver_arrive_dsmem_copy_finish(block_id, eB, (src_id_B.iter + K_PIPE_MAX) % PatternLen);
-        }
-        ++k_iter;
-        if (k_iter % PatternLen == 0) {
-          receiver_dsmem_copy_finish_phase ^= 1;
+      for ( ; k_dsmem_tile_count > 0; --k_dsmem_tile_count)
+      {
+        pipeline.receiver_wait_dsmem_copy_finish(receiver_dsmem_copy_finish_phase, 0);
+        receiver_dsmem_copy_finish_phase ^= 1;
+        pipeline.receiver_arrive_dsmem_copy_finish(src_A_block, 0);
+      }
+    }
+    // monitor consumer_wait conditions, to accelerate consumer_wait()
+    if (warp_idx_in_warp_group == 3 and lane_predicate) {
+      // may have bug
+      int mma_stage = 0;
+      auto pipeline_params = pipeline.get_params();
+      CUTLASS_PRAGMA_NO_UNROLL
+      for ( ; k_tile_count > 0; --k_tile_count)
+      {
+        pipeline.mma_wait(mma_stage, mma_wait_phase);
+        // if (PRINT_CONDITION(96) && prof_iter < PROFILE_ITER && mma_stage==pipeline_params.dsmem_recv_stage) {
+        //   monitor_wait_done[prof_iter] = get_clock();
+        //   mma_wait_dsmem_done[prof_iter] = t0[0];
+        //   wait_B[prof_iter] = t2[0] - t1[0];
+        //   ++prof_iter;
+        // }
+        pipeline.arrive_mma(mma_stage);
+        mma_stage++;
+        if (mma_stage == K_PIPE_MAX) {
+          mma_stage = 0;
+          mma_wait_phase ^= 1;
         }
       }
     }
   }
+"""
 
-
+collective_load_tail = """
 /// Perform a Producer Epilogue to prevent early exit of blocks in a Cluster
   CUTLASS_DEVICE void
-  load_tail(MainloopPipeline pipeline)
+  load_tail(
+      MainloopPipeline pipeline, 
+      PipelineState smem_pipe_write,
+      int& receiver_ready_phase)
   {
     int warp_idx = canonical_warp_idx();
     int warp_idx_in_warp_group = warp_idx % 4;
@@ -626,11 +432,14 @@ struct CollectiveMmaGen
        * then would just be acquired since the phase was 
        * still inverted from make_producer_start_state
        */
-      pipeline.wait_mma_finish(0);
+      // print("load tail\\n");
+      pipeline.producer_tail(smem_pipe_write, receiver_ready_phase);
+      // pipeline.producer_tail(smem_pipe_write);
     }
   }
+"""
 
-
+collective_mma = """
 /// Perform a collective-scoped matrix multiply-accumulate
   /// Consumer Perspective
   template <
@@ -638,8 +447,7 @@ struct CollectiveMmaGen
   >
   CUTLASS_DEVICE void
   mma(MainloopPipeline pipeline,
-      PhysicalPipelineState smem_pipe_read_physical,
-      LogicalPipelineState smem_pipe_read_logical,
+      PipelineState smem_pipe_read,
       FrgTensorC& accum,
       int k_tile_count,
       int thread_idx,
@@ -688,7 +496,7 @@ struct CollectiveMmaGen
         "ERROR : Incorrect number of MMAs in flight");
 
     // We release buffers to producer warps(dma load) with some mmas in flight
-    PhysicalPipelineState smem_pipe_release = smem_pipe_read_physical;
+    PipelineState smem_pipe_release = smem_pipe_read;
     auto pipeline_params = pipeline.get_params();
 
     // Prologue GMMAs
@@ -697,15 +505,21 @@ struct CollectiveMmaGen
     tiled_mma.accumulate_ = GMMA::ScaleOut::Zero;
 
     dim3 bid = cute::block_id_in_cluster();
+    uint32_t src_A_block = bid.y == 0 ?
+                            size<1>(ClusterShape{}) - 1 :
+                            bid.y - 1;
+    uint32_t src_B_block = bid.x == 0 ?
+                            size<0>(ClusterShape{}) - 1 :
+                            bid.x - 1; 
 
     warpgroup_fence_operand(accum);
     CUTLASS_PRAGMA_UNROLL
     for (int k_tile_prologue = prologue_mma_count; k_tile_prologue > 0; --k_tile_prologue)
     {
-      // WAIT on smem_pipe_read_physical until its data are available (phase bit flips from rdPhaseBit value)
-      pipeline.consumer_wait(smem_pipe_read_logical);
+      // WAIT on smem_pipe_read until its data are available (phase bit flips from rdPhaseBit value)
+      pipeline.consumer_wait(smem_pipe_read);
 
-      int read_stage = smem_pipe_read_logical.index() % K_PIPE_MAX;
+      int read_stage = smem_pipe_read.index();
       warpgroup_arrive();
       // Unroll the K mode manually to set scale D to 1
       CUTLASS_PRAGMA_UNROLL
@@ -717,26 +531,24 @@ struct CollectiveMmaGen
 
       warpgroup_commit_batch();
 
-      ++smem_pipe_read_physical;
-      ++smem_pipe_read_logical;
+      ++smem_pipe_read;
     }
 
     warpgroup_fence_operand(accum);
     // Mainloop GMMAs
     k_tile_count -= prologue_mma_count;
-    int k_release_iter = 0;
 
     CUTLASS_PRAGMA_NO_UNROLL
     for ( ; k_tile_count > 0; --k_tile_count)
     {
-      // WAIT on smem_pipe_read_physical until its data are available (phase bit flips from rdPhaseBit value)
-      pipeline.consumer_wait(smem_pipe_read_logical);
+      // WAIT on smem_pipe_read until its data are available (phase bit flips from rdPhaseBit value)
+      pipeline.consumer_wait(smem_pipe_read);
 
       //
       // Compute on k_tile
       //
 
-      int read_stage = smem_pipe_read_logical.index() % K_PIPE_MAX;
+      int read_stage = smem_pipe_read.index();
       warpgroup_fence_operand(accum);
       warpgroup_arrive();
       // Unroll the K mode manually to set scale D to 1
@@ -748,48 +560,52 @@ struct CollectiveMmaGen
       }
       warpgroup_commit_batch();
 
-      /// Wait on the GMMA barrier for K_PIPE_MMAS (or fewer) outstanding to ensure smem_pipe_write_physical is consumed
+      /// Wait on the GMMA barrier for K_PIPE_MMAS (or fewer) outstanding to ensure smem_pipe_write is consumed
       warpgroup_wait<K_PIPE_MMAS>();
       warpgroup_fence_operand(accum);
 
-      // Use dsmem as input when using this stage the next time
-      block_iter_id src_id_A = src_A[bid.x][bid.y][(k_release_iter + K_PIPE_MAX) % PatternLen];
-      block_iter_id src_id_B = src_B[bid.x][bid.y][(k_release_iter + K_PIPE_MAX) % PatternLen];
-      if (threadIdx.x == 128 || threadIdx.x == 256) {
-        if (src_id_A.x != -1 && src_id_A.y != -1) {
-          uint32_t block_id = src_id_A.x + src_id_A.y * size<0>(ClusterShape{});
-          pipeline.receiver_arrive_sender(block_id, eA, src_id_A.iter);
-        }
-        if (src_id_B.x != -1 && src_id_B.y != -1) {
-          uint32_t block_id = src_id_B.x + src_id_B.y * size<0>(ClusterShape{});
-          pipeline.receiver_arrive_sender(block_id, eB, src_id_B.iter);
+      if (smem_pipe_release.index() == pipeline_params.dsmem_recv_stage) {
+        // reset & arrive on full_barrier after mma
+        // but the ending may have bug
+        if (threadIdx.x == 128 || threadIdx.x == 256) {
+          // may have bug, 2 consumer warpgroup should both arrive
+          if (pipeline_params.dsmem_copy_A) {
+            pipeline.receiver_arrive_sender(src_A_block, 0);
+          }
+          if (pipeline_params.dsmem_copy_B) {
+            pipeline.receiver_arrive_sender(src_B_block, 1);
+          }
         }
       }
-      pipeline.consumer_release(smem_pipe_release, eA);
-      pipeline.consumer_release(smem_pipe_release, eB);
+      // UNLOCK smem_pipe_release, done _computing_ on it
+      pipeline.consumer_release(smem_pipe_release);
 
-      // Advance smem_pipe_read_physical and smem_pipe_release
-      ++smem_pipe_read_physical;
-      ++smem_pipe_read_logical;
+      // Advance smem_pipe_read and smem_pipe_release
+      ++smem_pipe_read;
       ++smem_pipe_release;
-      ++k_release_iter;
     }
 
     warpgroup_fence_operand(accum);
   }
+"""
 
-
+collective_mma_tail = """
 /// Perform a Consumer Epilogue to release all buffers
   CUTLASS_DEVICE void
   mma_tail( MainloopPipeline pipeline, 
-            PhysicalPipelineState smem_pipe_release, 
+            PipelineState smem_pipe_release, 
             int k_tile_count) {
     // Prologue GMMAs
     int prologue_mma_count = min(K_PIPE_MMAS, k_tile_count);
     k_tile_count -= prologue_mma_count;
-    int k_iter = k_tile_count;
     dim3 bid = cute::block_id_in_cluster();
     auto pipeline_params = pipeline.get_params();
+    uint32_t src_A_block = bid.y == 0 ?
+                      size<1>(ClusterShape{}) - 1 :
+                      bid.y - 1;
+    uint32_t src_B_block = bid.x == 0 ?
+                      size<0>(ClusterShape{}) - 1 :
+                      bid.x - 1; 
 
     smem_pipe_release.advance(k_tile_count);
     
@@ -797,43 +613,160 @@ struct CollectiveMmaGen
     warpgroup_wait<0>();
 
     for (int count = 0; count < prologue_mma_count; ++count) {
-      block_iter_id src_id_A = src_A[bid.x][bid.y][(k_iter + K_PIPE_MAX) % PatternLen];
-      block_iter_id src_id_B = src_B[bid.x][bid.y][(k_iter + K_PIPE_MAX) % PatternLen];
-      // pipeline.consumer_release(smem_pipe_release);     // UNLOCK smem_pipe_release, done _computing_ on it
-      if (threadIdx.x == 128 || threadIdx.x == 256) {
-        if (src_id_A.x != -1 && src_id_A.y != -1) {
-          uint32_t block_id = src_id_A.x + src_id_A.y * size<0>(ClusterShape{});
-          pipeline.receiver_arrive_sender(block_id, eA, src_id_A.iter);
-        }
-        if (src_id_B.x != -1 && src_id_B.y != -1) {
-          uint32_t block_id = src_id_B.x + src_id_B.y * size<0>(ClusterShape{});
-          pipeline.receiver_arrive_sender(block_id, eB, src_id_B.iter);
+      pipeline.consumer_release(smem_pipe_release);     // UNLOCK smem_pipe_release, done _computing_ on it
+      if (smem_pipe_release.index() == pipeline_params.dsmem_recv_stage) {
+        if (threadIdx.x == 128 || threadIdx.x == 256) {
+          // may have bug
+          if (pipeline_params.dsmem_copy_A) {
+            pipeline.receiver_arrive_sender(src_A_block, 0);
+          }
+          if (pipeline_params.dsmem_copy_B) {
+            pipeline.receiver_arrive_sender(src_B_block, 1);
+          }
         }
       }
-      pipeline.consumer_release(smem_pipe_release, eA);
-      pipeline.consumer_release(smem_pipe_release, eB);
       ++smem_pipe_release;
     }
   }
+"""
 
-  CUTLASS_DEVICE void
-  mma_finish(MainloopPipeline pipeline) {
-    if (threadIdx.x == 128 || threadIdx.x == 256) {
-      pipeline.mma_finish();
-    }
-  }
-
-
+collective_tail = """
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 } // namespace cutlass::gemm::collective
+"""
 
 
+header = """
+#include <iostream>
+#include <vector>
+
+#include "cutlass/cutlass.h"
+
+#include "cute/tensor.hpp"
+#include "cutlass/tensor_ref.h"
+#include "cutlass/epilogue/collective/default_epilogue.hpp"
+#include "cutlass/epilogue/thread/linear_combination.h"
+#include "cutlass/gemm/dispatch_policy.hpp"
+#include "cutlass/gemm/collective/collective_builder.hpp"
+#include "cutlass/epilogue/collective/collective_builder.hpp"
+#include "cutlass/gemm/device/gemm_universal_adapter.h"
+#include "cutlass/gemm/kernel/gemm_universal.hpp"
+
+#include "cutlass/util/command_line.h"
+#include "cutlass/util/distribution.h"
+#include "cutlass/util/host_tensor.h"
+#include "cutlass/util/packed_stride.hpp"
+#include "cutlass/util/tensor_view_io.h"
+#include "cutlass/util/reference/device/gemm.h"
+#include "cutlass/util/reference/device/tensor_compare.h"
+#include "cutlass/util/reference/device/tensor_fill.h"
+
+#include "cutlass/arch/mma.h"
+#include "cutlass/gemm/gemm.h"
+#include "cute/atom/mma_traits_sm90_gmma.hpp"
+#include "cute/atom/copy_traits_sm90_tma.hpp"
+
+#include "cute/arch/cluster_sm90.hpp"
+#include "cute/arch/copy_sm90.hpp"
+
+#include "cute/algorithm/functional.hpp"
+#include "cute/atom/mma_atom.hpp"
+#include "cute/algorithm/gemm.hpp"
+#include "cute/tensor_predicate.hpp"
+#include "cute/numeric/arithmetic_tuple.hpp"
+#include "cutlass/pipeline/pipeline.hpp"
+
+#include "helper.h"
+
+#define TEST_CORRECTNESS 0
+#define TEST_ROUND 10000
+#define PATTERN_LEN 8
+
+using namespace cute;
+
+#if defined(CUTLASS_ARCH_MMA_SM90_SUPPORTED)
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+/// GEMM kernel configurations
+/////////////////////////////////////////////////////////////////////////////////////////////////
+
+// A matrix configuration
+using         ElementA    = cutlass::half_t;                                // Element type for A matrix operand
+using         LayoutA     = cutlass::layout::ColumnMajor;                      // Layout type for A matrix operand
+constexpr int AlignmentA  = 128 / cutlass::sizeof_bits<ElementA>::value;    // Memory access granularity/alignment of A matrix in units of elements (up to 16 bytes)
+
+// B matrix configuration
+using         ElementB    = cutlass::half_t;                                // Element type for B matrix operand
+using         LayoutB     = cutlass::layout::RowMajor;                   // Layout type for B matrix operand
+constexpr int AlignmentB  = 128 / cutlass::sizeof_bits<ElementB>::value;    // Memory access granularity/alignment of B matrix in units of elements (up to 16 bytes)
+
+// C/D matrix configuration
+using         ElementC    = cutlass::half_t;                                // Element type for C and D matrix operands
+using         LayoutC     = cutlass::layout::ColumnMajor;                   // Layout type for C and D matrix operands
+constexpr int AlignmentC  = 128 / cutlass::sizeof_bits<ElementC>::value;    // Memory access granularity/alignment of C matrix in units of elements (up to 16 bytes)
+
+// Core kernel configurations
+using ElementAccumulator  = float;                                          // Element type for internal accumulation
+using ArchTag             = cutlass::arch::Sm90;                            // Tag indicating the minimum SM that supports the intended feature
+using OperatorClass       = cutlass::arch::OpClassTensorOp;                 // Operator class tag
+using TileShape           = Shape<_128,_256,_64>;                           // Threadblock-level tile size
+using ClusterShape        = Shape<_1,_2,_1>;                                // Shape of the threadblocks in a cluster
+using StageCountType = cutlass::gemm::collective::StageCountAuto;           // Stage count maximized based on the tile size
+using KernelSchedule = cutlass::gemm::collective::KernelScheduleAuto;       // Kernel to launch based on the default setting in the Collective Builder 
+
+using CollectiveEpilogue = typename cutlass::epilogue::collective::CollectiveBuilder<
+    cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp,
+    TileShape, ClusterShape,
+    cutlass::epilogue::collective::EpilogueTileAuto,
+    ElementAccumulator, ElementAccumulator,
+    ElementC, LayoutC, AlignmentC,
+    ElementC, LayoutC, AlignmentC,
+    cutlass::epilogue::TmaWarpSpecializedCooperative
+  >::CollectiveOp;
+
+static_assert(is_static<TileShape>::value);
+static_assert(is_static<ClusterShape>::value);
+static_assert(cutlass::gemm::collective::detail::is_aligned<ElementA, AlignmentA, ElementB, AlignmentB, cutlass::gemm::collective::detail::tma_alignment_bytes>(),
+            "Should meet TMA alignment requirement\\n");
+
+// For fp32 types, map to tf32 MMA value type
+using MmaElementA = cute::conditional_t<cute::is_same_v<ElementA, float>, tfloat32_t, ElementA>;
+using MmaElementB = cute::conditional_t<cute::is_same_v<ElementB, float>, tfloat32_t, ElementB>;
+
+static constexpr cute::GMMA::Major GmmaMajorA = cutlass::gemm::collective::detail::gmma_ss_tag_to_major_A<MmaElementA, LayoutA>();
+static constexpr cute::GMMA::Major GmmaMajorB = cutlass::gemm::collective::detail::gmma_ss_tag_to_major_B<MmaElementB, LayoutB>();
+
+using AtomLayoutMNK =
+    Layout<Shape<_2,_1,_1>>;
+
+using TiledMma = decltype(cute::make_tiled_mma(cute::GMMA::ss_op_selector<
+    MmaElementA, MmaElementB, ElementAccumulator, TileShape, GmmaMajorA, GmmaMajorB>(), AtomLayoutMNK{}));
+
+// force not to use TMA multicast 
+using GmemTiledCopyA = decltype(cute::SM90_TMA_LOAD{});
+using GmemTiledCopyB = decltype(cute::SM90_TMA_LOAD{});
+
+using SmemLayoutAtomA = decltype(cutlass::gemm::collective::detail::ss_smem_selector<
+    GmmaMajorA, MmaElementA, decltype(cute::get<0>(TileShape{})), decltype(cute::get<2>(TileShape{}))>());
+using SmemLayoutAtomB = decltype(cutlass::gemm::collective::detail::ss_smem_selector<
+    GmmaMajorB, MmaElementB, decltype(cute::get<1>(TileShape{})), decltype(cute::get<2>(TileShape{}))>());
+
+static constexpr int PipelineStages = cutlass::gemm::collective::detail::compute_stage_count_or_override<cutlass::gemm::collective::detail::sm90_smem_capacity_bytes,
+    MmaElementA, MmaElementB, TileShape>(cutlass::gemm::collective::StageCountAutoCarveout<
+    sizeof(typename CollectiveEpilogue::SharedStorage)>{});
+using DispatchPolicy = cutlass::gemm::MainloopSm90TmaGmmaWarpSpecializedDSMEM<
+    PipelineStages, ClusterShape, cutlass::gemm::KernelTmaWarpSpecializedCooperativeDSMEM>;
+
+using SmemCopyAtomA = void; 
+using SmemCopyAtomB = void;
+"""
+
+tail = """
 using CollectiveMainloop = cutlass::gemm::collective::CollectiveMmaGen<
       PipelineStages,
-      PatternLen,
       ClusterShape,
       cutlass::gemm::KernelTmaWarpSpecializedCooperativeDSMEM,
       TileShape,
@@ -852,7 +785,7 @@ using CollectiveMainloop = cutlass::gemm::collective::CollectiveMmaGen<
       cute::identity
     >;
 
-using GemmKernel = cutlass::gemm::kernel::GemmUniversalGen<
+using GemmKernel = cutlass::gemm::kernel::GemmUniversal<
     Shape<int,int,int>, // Indicates ProblemShape
     CollectiveMainloop,
     CollectiveEpilogue
@@ -912,7 +845,7 @@ struct Options {
     help(false),
     m(16384), n(16384), k(16384),
     alpha(1.f), beta(0.f),
-    iterations(1)
+    iterations(10)
   { }
 
   // Parses the command line
@@ -935,20 +868,20 @@ struct Options {
   /// Prints the usage statement.
   std::ostream & print_usage(std::ostream &out) const {
 
-    out << "48_hopper_warp_specialized_gemm\n\n"
-      << "  Hopper FP32 GEMM using a Warp Specialized kernel.\n\n"
-      << "Options:\n\n"
-      << "  --help                      If specified, displays this usage statement\n\n"
-      << "  --m=<int>                   Sets the M extent of the GEMM\n"
-      << "  --n=<int>                   Sets the N extent of the GEMM\n"
-      << "  --k=<int>                   Sets the K extent of the GEMM\n"
-      << "  --alpha=<f32>               Epilogue scalar alpha\n"
-      << "  --beta=<f32>                Epilogue scalar beta\n\n"
-      << "  --iterations=<int>          Number of profiling iterations to perform.\n\n";
+    out << "48_hopper_warp_specialized_gemm\\n\\n"
+      << "  Hopper FP32 GEMM using a Warp Specialized kernel.\\n\\n"
+      << "Options:\\n\\n"
+      << "  --help                      If specified, displays this usage statement\\n\\n"
+      << "  --m=<int>                   Sets the M extent of the GEMM\\n"
+      << "  --n=<int>                   Sets the N extent of the GEMM\\n"
+      << "  --k=<int>                   Sets the K extent of the GEMM\\n"
+      << "  --alpha=<f32>               Epilogue scalar alpha\\n"
+      << "  --beta=<f32>                Epilogue scalar beta\\n\\n"
+      << "  --iterations=<int>          Number of profiling iterations to perform.\\n\\n";
 
     out
-      << "\n\nExamples:\n\n"
-      << "$ " << "48_hopper_warp_specialized_gemm" << " --m=1024 --n=512 --k=1024 --alpha=2 --beta=0.707 \n\n";
+      << "\\n\\nExamples:\\n\\n"
+      << "$ " << "48_hopper_warp_specialized_gemm" << " --m=1024 --n=512 --k=1024 --alpha=2 --beta=0.707 \\n\\n";
 
     return out;
   }
@@ -1157,20 +1090,20 @@ int main(int argc, char const **args) {
   // CUTLASS must be compiled with CUDA 12.0 Toolkit to run this example
   // and must have compute capability at least 90.
   if (__CUDACC_VER_MAJOR__ < 12) {
-    std::cerr << "This example requires CUDA 12 or newer.\n";
+    std::cerr << "This example requires CUDA 12 or newer.\\n";
     // Returning zero so this test passes on older Toolkits. Its actions are no-op.
     return 0;
   }
 
   cudaDeviceProp props;
   int current_device_id;
-  cudaGetDevice(&current_device_id);
-  cudaGetDeviceProperties(&props, current_device_id);
+  CUDA_CHECK(cudaGetDevice(&current_device_id));
+  CUDA_CHECK(cudaGetDeviceProperties(&props, current_device_id));
   cudaError_t error = cudaGetDeviceProperties(&props, 0);
   if (props.major < 9) {
     std::cerr
       << "This example requires a GPU of NVIDIA's Hopper Architecture or "
-      << "later (compute capability 90 or greater).\n";
+      << "later (compute capability 90 or greater).\\n";
     return 0;
   }
 
@@ -1207,4 +1140,4 @@ int main(int argc, char const **args) {
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-
+"""
