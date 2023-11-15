@@ -184,6 +184,7 @@ struct CollectiveMma<
         SmemLayoutB{}(_,_,0))); // force no mcast
     TMA_A tma_load_a;
     TMA_B tma_load_b;
+    void* workspace; 
   };
 
   //
@@ -193,7 +194,7 @@ struct CollectiveMma<
   template <class ProblemShape>
   static constexpr Params
   to_underlying_arguments(ProblemShape const& problem_shape, Arguments const& args, void* workspace) {
-    (void) workspace;
+    // (void) workspace;
 
     // Optionally append _1s until problem shape is rank-4 (MNKL), in case it is only rank-3 (MNK)
     auto problem_shape_MNKL = append<4>(problem_shape, Int<1>{});
@@ -217,7 +218,8 @@ struct CollectiveMma<
         SmemLayoutB{}(_,_,cute::Int<0>{})); // force no mcast
     return {
       tma_load_a,
-      tma_load_b
+      tma_load_b,
+      workspace
     };
   }
 
@@ -242,7 +244,8 @@ struct CollectiveMma<
   template <
     class TensorA, class TMA_LOAD_A,
     class TensorB, class TMA_LOAD_B,
-    class KTileIterator
+    class KTileIterator,
+    class TensorDummyA, class TensorDummyB
   >
   CUTLASS_DEVICE void
   load(
@@ -257,7 +260,9 @@ struct CollectiveMma<
       int& sender_dsmem_copy_finish_phase,
       int& receiver_dsmem_copy_finish_phase,
       int& mma_wait_phase,
-      TensorStorage& shared_tensors
+      TensorStorage& shared_tensors,
+      TensorDummyA const& dgtA,
+      TensorDummyB const& dgtB
       #if PROFILE
       , uint64_t* issue_copy_B
       , uint64_t* copy_B_done
@@ -320,7 +325,14 @@ struct CollectiveMma<
         int write_stage = smem_pipe_write.index();
 
         // LOCK smem_pipe_write for _writing_
-        pipeline.producer_acquire(smem_pipe_write);
+        uint32_t dummy_transaction_bytes_A = size<0>(SmemLayoutA{}) * size<1>(SmemLayoutA{}) * static_cast<uint32_t>(sizeof(ElementA));
+        uint32_t dummy_transaction_bytes_B = size<0>(SmemLayoutB{}) * size<1>(SmemLayoutB{}) * static_cast<uint32_t>(sizeof(ElementB));
+        uint32_t A_transaction_bytes = (size<0>(SmemLayoutA{}) * size<1>(SmemLayoutA{}) * static_cast<uint32_t>(sizeof(ElementA))) 
+                                        + dummy_transaction_bytes_A * SIMULATE_MULTIPLE;
+        uint32_t B_transaction_bytes = (size<0>(SmemLayoutB{}) * size<1>(SmemLayoutB{}) * static_cast<uint32_t>(sizeof(ElementB))) 
+                                        + dummy_transaction_bytes_B * SIMULATE_MULTIPLE;
+        
+        pipeline.producer_acquire(smem_pipe_write, A_transaction_bytes, B_transaction_bytes);
 
         //
         // Copy gmem to smem for *k_tile_iter
@@ -351,6 +363,10 @@ struct CollectiveMma<
         }
         if (write_stage != pipeline_params.dsmem_recv_stage || (not pipeline_params.dsmem_copy_A)) {
           // TMA load A from gmem to smem
+          // Dummy copy from gmem to smem to simulate low gmem bandwidth hardware spec
+          for (int i=0; i<SIMULATE_MULTIPLE; i++) {
+            gmem2cta_copy_kernel(dgtA(i,_).data().get(), tAsA(_,_,_,write_stage).data().get(), tma_A_barrier, dummy_transaction_bytes_A);
+          }
           copy(tma_load_a.with(*tma_A_barrier, mcast_mask_a), tAgA(_,_,_,k_tile_iter_AB), tAsA(_,_,_,write_stage));
         }
         if (write_stage != pipeline_params.dsmem_recv_stage || (not pipeline_params.dsmem_copy_B)) {
@@ -361,6 +377,9 @@ struct CollectiveMma<
           }
           #endif
           // TMA load B from gmem to smem
+          for (int i=0; i<SIMULATE_MULTIPLE; i++) {
+            gmem2cta_copy_kernel(dgtB(i,_).data().get(), tBsB(_,_,_,write_stage).data().get(), tma_B_barrier, dummy_transaction_bytes_B);
+          }
           copy(tma_load_b.with(*tma_B_barrier, mcast_mask_b), tBgB(_,_,_,k_tile_iter_AB), tBsB(_,_,_,write_stage));
         }
 

@@ -231,7 +231,9 @@ public:
   static
   int
   get_workspace_size(Arguments const& args) {
-    return 0;
+    uint32_t size_dummy_A = SM_COUNT * SIMULATE_MULTIPLE * size<0>(TileShape{}) * size<2>(TileShape{}) * sizeof(ElementA);
+    uint32_t size_dummy_B = SM_COUNT * SIMULATE_MULTIPLE * size<1>(TileShape{}) * size<2>(TileShape{}) * sizeof(ElementB);
+    return size_dummy_A + size_dummy_B;
   }
 
   // Computes the kernel launch grid shape based on runtime parameters
@@ -365,6 +367,19 @@ public:
     Tensor mA_mkl = params.mainloop.tma_load_a.get_tma_tensor(make_shape(M,K,L));                            // (m,k,l)
     Tensor mB_nkl = params.mainloop.tma_load_b.get_tma_tensor(make_shape(N,K,L));                            // (n,k,l)
 
+    auto gAp = make_gmem_ptr<ElementA>(reinterpret_cast<ElementA*>(params.mainloop.workspace) + 0);
+    auto gBp = make_gmem_ptr<ElementB>(reinterpret_cast<ElementA*>(params.mainloop.workspace) + SM_COUNT*SIMULATE_MULTIPLE*size<0>(TileShape{})*size<2>(TileShape{}));
+    Tensor dummy_gbw_A = make_tensor(gAp, make_shape(gridDim.x*gridDim.y, SIMULATE_MULTIPLE, size<0>(TileShape{}) * size<2>(TileShape{})), 
+                                          make_stride(size<0>(TileShape{}) * size<2>(TileShape{}) * SIMULATE_MULTIPLE, 
+                                                      size<0>(TileShape{}) * size<2>(TileShape{}), 
+                                                      1));
+    Tensor dummy_gbw_B = make_tensor(gBp, make_shape(gridDim.x*gridDim.y, SIMULATE_MULTIPLE, size<1>(TileShape{}) * size<2>(TileShape{})), 
+                                          make_stride(size<1>(TileShape{}) * size<2>(TileShape{}) * SIMULATE_MULTIPLE, 
+                                                      size<1>(TileShape{}) * size<2>(TileShape{}), 
+                                                      1));
+    Tensor dgtA = dummy_gbw_A(blockIdx.x*gridDim.y + blockIdx.y, _, _);
+    Tensor dgtB = dummy_gbw_B(blockIdx.x*gridDim.y + blockIdx.y, _, _);
+
     // Get the appropriate blocks for this thread block -- potential for thread block locality
     TiledMma tiled_mma;
     auto blk_shape = TileShape{};                                                                // (BLK_M,BLK_N,BLK_K)
@@ -411,7 +426,9 @@ public:
           gB, params.mainloop.tma_load_b,
           k_tile_iter, k_tile_count,
           thread_idx,
-          shared_storage.tensors.mainloop
+          shared_storage.tensors.mainloop,
+          dgtA, 
+          dgtB
         );
         // Update starting pipeline state for the next tile
         mainloop_pipe_producer_state.advance(k_tile_count);

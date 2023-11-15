@@ -315,8 +315,8 @@ public :
   }
 
   CUTLASS_DEVICE
-  void producer_acquire(PipelineState<Stages> state, ProducerToken barrier_token = {BarrierStatus::WaitAgain}) {
-    producer_acquire(state.index(), state.phase(), barrier_token);
+  void producer_acquire(PipelineState<Stages> state, uint32_t transaction_bytes=0, ProducerToken barrier_token = {BarrierStatus::WaitAgain}) {
+    producer_acquire(state.index(), state.phase(), barrier_token, transaction_bytes);
   }
 
   CUTLASS_DEVICE
@@ -379,13 +379,18 @@ private :
   }
 
   CUTLASS_DEVICE
-  void producer_acquire(uint32_t stage, uint32_t phase, ProducerToken barrier_token) {
+  void producer_acquire(uint32_t stage, uint32_t phase, ProducerToken barrier_token, uint32_t transaction_bytes=0) {
     if (barrier_token == BarrierStatus::WaitAgain) {
       empty_barrier_ptr_[stage].wait(phase);
     }
 
     if (params_.is_leader) {
-      full_barrier_ptr_[stage].arrive_and_reset_bytes(params_.transaction_bytes);
+      if (transaction_bytes == 0) {
+        full_barrier_ptr_[stage].arrive_and_reset_bytes(params_.transaction_bytes);
+      }
+      else {
+        full_barrier_ptr_[stage].arrive_and_reset_bytes(transaction_bytes);
+      }
     }
     #ifndef NDEBUG
     if (params_.role == ThreadCategory::Consumer || params_.role == ThreadCategory::NonParticipant) {
@@ -634,8 +639,11 @@ public :
   }
 
   CUTLASS_DEVICE
-  void producer_acquire(PipelineState<Stages> state, ProducerToken barrier_token = {BarrierStatus::WaitAgain}) {
-    producer_acquire(state.index(), state.phase(), barrier_token);
+  void producer_acquire(PipelineState<Stages> state, 
+                        uint32_t A_transaction_bytes=0, 
+                        uint32_t B_transaction_bytes=0, 
+                        ProducerToken barrier_token = {BarrierStatus::WaitAgain}) {
+    producer_acquire(state.index(), state.phase(), barrier_token, A_transaction_bytes, B_transaction_bytes);
   }
 
 // sender_wait_receiver_ready()     : receiver_arrive_sender()
@@ -824,14 +832,19 @@ private :
   }
 
   CUTLASS_DEVICE
-  void producer_acquire(uint32_t stage, uint32_t phase, ProducerToken barrier_token) {
+  void producer_acquire(uint32_t stage, uint32_t phase, ProducerToken barrier_token, 
+                        uint32_t A_transaction_bytes=0, uint32_t B_transaction_bytes=0) {
     if (barrier_token == BarrierStatus::WaitAgain) {
       empty_barrier_ptr_[stage].wait(phase);
     }
 
     if (params_.is_leader) {
-      uint32_t A_transaction_bytes = params_.A_transaction_bytes;
-      uint32_t B_transaction_bytes = params_.B_transaction_bytes;
+      if (A_transaction_bytes == 0) {
+        A_transaction_bytes = params_.A_transaction_bytes;
+      }
+      if (B_transaction_bytes == 0) {
+        B_transaction_bytes = params_.B_transaction_bytes;
+      }
       if (stage != params_.dsmem_recv_stage || not params_.dsmem_copy_A) {
         full_barrier_ptr_[0][stage].arrive_and_reset_bytes(A_transaction_bytes);
       }
