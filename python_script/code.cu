@@ -1,4 +1,4 @@
-header_0 = """
+
 #include <iostream>
 
 #include "cutlass/cutlass.h"
@@ -75,9 +75,7 @@ using OperatorClass       = cutlass::arch::OpClassTensorOp;                 // O
 using TileShape           = Shape<_128,_256,_64>;                           // Threadblock-level tile size
 using StageCountType = cutlass::gemm::collective::StageCountAuto;           // Stage count maximized based on the tile size
 using KernelSchedule = cutlass::gemm::collective::KernelScheduleAuto;       // Kernel to launch based on the default setting in the Collective Builder 
-"""
 
-header_1 = """
 using CollectiveEpilogue = typename cutlass::epilogue::collective::CollectiveBuilder<
     cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp,
     TileShape, ClusterShape,
@@ -91,7 +89,7 @@ using CollectiveEpilogue = typename cutlass::epilogue::collective::CollectiveBui
 static_assert(is_static<TileShape>::value);
 static_assert(is_static<ClusterShape>::value);
 static_assert(cutlass::gemm::collective::detail::is_aligned<ElementA, AlignmentA, ElementB, AlignmentB, cutlass::gemm::collective::detail::tma_alignment_bytes>(),
-            "Should meet TMA alignment requirement\\n");
+            "Should meet TMA alignment requirement\n");
 
 // For fp32 types, map to tf32 MMA value type
 using MmaElementA = cute::conditional_t<cute::is_same_v<ElementA, float>, tfloat32_t, ElementA>;
@@ -128,9 +126,7 @@ using SmemCopyAtomB = void;
 struct block_iter_id {
   int8_t x, y, iter;
 };
-"""
 
-collective_mma_code_0 = """
 /////////////////////////////////////////////////////////////////////////////////////////////////
 /// GEMM collective code
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -228,9 +224,77 @@ struct CollectiveMmaGen
   static constexpr bool ConvertF32toTF32B = cute::is_same_v<float, ElementB>;
   using InternalElementA = cute::conditional_t<ConvertF32toTF32A, tfloat32_t, uint_bit_t<sizeof_bits_v<ElementA>>>;
   using InternalElementB = cute::conditional_t<ConvertF32toTF32B, tfloat32_t, uint_bit_t<sizeof_bits_v<ElementB>>>;
-  """
+  	int8_t tile_order[2][4][PatternLen] = {
+		{
+	    {0, 1, 2, 3, 4, 5, 6, 7},
+	    {1, 0, 2, 3, 4, 5, 6, 7},
+	    {0, 1, 2, 3, 4, 5, 6, 7},
+	    {1, 0, 2, 3, 4, 5, 6, 7},
+		},
+		{
+	    {1, 0, 2, 3, 4, 5, 6, 7},
+	    {0, 1, 2, 3, 4, 5, 6, 7},
+	    {1, 0, 2, 3, 4, 5, 6, 7},
+	    {0, 1, 2, 3, 4, 5, 6, 7},
+		},
+	};
+	block_iter_id src_A[2][4][PatternLen] = {
+		{
+	    {{-1, -1, -1},{0, 1, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{0, 0, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{0, 3, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{0, 2, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+		},
+		{
+	    {{-1, -1, -1},{1, 1, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{1, 0, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{1, 3, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{1, 2, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+		},
+	};
+	block_iter_id src_B[2][4][PatternLen] = {
+		{
+	    {{-1, -1, -1},{1, 0, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{1, 1, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{1, 2, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{1, 3, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+		},
+		{
+	    {{-1, -1, -1},{0, 0, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{0, 1, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{0, 2, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{0, 3, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+		},
+	};
+	block_iter_id dst_A[2][4][PatternLen] = {
+		{
+	    {{0, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{0, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{0, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{0, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+		},
+		{
+	    {{1, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{1, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{1, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{1, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+		},
+	};
+	block_iter_id dst_B[2][4][PatternLen] = {
+		{
+	    {{1, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{1, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{1, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{1, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+		},
+		{
+	    {{0, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{0, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{0, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{0, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+		},
+	};
 
-collective_mma_code_1 = """
   struct SharedStorage
   {
     struct TensorStorage : cute::aligned_struct<128> {
@@ -756,9 +820,7 @@ collective_mma_code_1 = """
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 } // namespace cutlass::gemm::collective
-"""
 
-tail = """
 using CollectiveMainloop = cutlass::gemm::collective::CollectiveMmaGen<
       PipelineStages,
       PatternLen,
@@ -863,20 +925,20 @@ struct Options {
   /// Prints the usage statement.
   std::ostream & print_usage(std::ostream &out) const {
 
-    out << "48_hopper_warp_specialized_gemm\\n\\n"
-      << "  Hopper FP32 GEMM using a Warp Specialized kernel.\\n\\n"
-      << "Options:\\n\\n"
-      << "  --help                      If specified, displays this usage statement\\n\\n"
-      << "  --m=<int>                   Sets the M extent of the GEMM\\n"
-      << "  --n=<int>                   Sets the N extent of the GEMM\\n"
-      << "  --k=<int>                   Sets the K extent of the GEMM\\n"
-      << "  --alpha=<f32>               Epilogue scalar alpha\\n"
-      << "  --beta=<f32>                Epilogue scalar beta\\n\\n"
-      << "  --iterations=<int>          Number of profiling iterations to perform.\\n\\n";
+    out << "48_hopper_warp_specialized_gemm\n\n"
+      << "  Hopper FP32 GEMM using a Warp Specialized kernel.\n\n"
+      << "Options:\n\n"
+      << "  --help                      If specified, displays this usage statement\n\n"
+      << "  --m=<int>                   Sets the M extent of the GEMM\n"
+      << "  --n=<int>                   Sets the N extent of the GEMM\n"
+      << "  --k=<int>                   Sets the K extent of the GEMM\n"
+      << "  --alpha=<f32>               Epilogue scalar alpha\n"
+      << "  --beta=<f32>                Epilogue scalar beta\n\n"
+      << "  --iterations=<int>          Number of profiling iterations to perform.\n\n";
 
     out
-      << "\\n\\nExamples:\\n\\n"
-      << "$ " << "48_hopper_warp_specialized_gemm" << " --m=1024 --n=512 --k=1024 --alpha=2 --beta=0.707 \\n\\n";
+      << "\n\nExamples:\n\n"
+      << "$ " << "48_hopper_warp_specialized_gemm" << " --m=1024 --n=512 --k=1024 --alpha=2 --beta=0.707 \n\n";
 
     return out;
   }
@@ -1085,7 +1147,7 @@ int main(int argc, char const **args) {
   // CUTLASS must be compiled with CUDA 12.0 Toolkit to run this example
   // and must have compute capability at least 90.
   if (__CUDACC_VER_MAJOR__ < 12) {
-    std::cerr << "This example requires CUDA 12 or newer.\\n";
+    std::cerr << "This example requires CUDA 12 or newer.\n";
     // Returning zero so this test passes on older Toolkits. Its actions are no-op.
     return 0;
   }
@@ -1098,7 +1160,7 @@ int main(int argc, char const **args) {
   if (props.major < 9) {
     std::cerr
       << "This example requires a GPU of NVIDIA's Hopper Architecture or "
-      << "later (compute capability 90 or greater).\\n";
+      << "later (compute capability 90 or greater).\n";
     return 0;
   }
 
@@ -1135,4 +1197,5 @@ int main(int argc, char const **args) {
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-"""
+
+
