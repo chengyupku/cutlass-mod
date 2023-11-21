@@ -75,6 +75,8 @@ using OperatorClass       = cutlass::arch::OpClassTensorOp;                 // O
 using TileShape           = Shape<_128,_256,_64>;                           // Threadblock-level tile size
 using StageCountType = cutlass::gemm::collective::StageCountAuto;           // Stage count maximized based on the tile size
 using KernelSchedule = cutlass::gemm::collective::KernelScheduleAuto;       // Kernel to launch based on the default setting in the Collective Builder 
+using ClusterShape = Shape<_2,_4,_1>; // Shape of the threadblocks in a cluster
+static constexpr int PatternLen = 8;
 
 using CollectiveEpilogue = typename cutlass::epilogue::collective::CollectiveBuilder<
     cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp,
@@ -187,6 +189,7 @@ struct CollectiveMmaGen
                              typename DispatchPolicy::ClusterShape>;
   using PhysicalPipelineState = cutlass::PipelineState<DispatchPolicy::Stages>;
   using LogicalPipelineState = cutlass::PipelineState<PatternLen>;
+  using SepPipelineState = cutlass::SeparatePipelineState<PatternLen>;
 
   using PipelineParams = typename MainloopPipeline::Params;
 
@@ -224,74 +227,74 @@ struct CollectiveMmaGen
   static constexpr bool ConvertF32toTF32B = cute::is_same_v<float, ElementB>;
   using InternalElementA = cute::conditional_t<ConvertF32toTF32A, tfloat32_t, uint_bit_t<sizeof_bits_v<ElementA>>>;
   using InternalElementB = cute::conditional_t<ConvertF32toTF32B, tfloat32_t, uint_bit_t<sizeof_bits_v<ElementB>>>;
-  	int8_t tile_order[2][4][PatternLen] = {
+	int8_t tile_order[2][4][PatternLen] = {
 		{
-	    {0, 1, 2, 3, 4, 5, 6, 7},
-	    {1, 0, 2, 3, 4, 5, 6, 7},
-	    {0, 1, 2, 3, 4, 5, 6, 7},
-	    {1, 0, 2, 3, 4, 5, 6, 7},
+	    {4, 0, 5, 1, 6, 7, 2, 3},
+	    {4, 1, 5, 0, 6, 7, 3, 2},
+	    {4, 0, 5, 1, 6, 7, 2, 3},
+	    {4, 1, 5, 0, 6, 7, 3, 2},
 		},
 		{
-	    {1, 0, 2, 3, 4, 5, 6, 7},
-	    {0, 1, 2, 3, 4, 5, 6, 7},
-	    {1, 0, 2, 3, 4, 5, 6, 7},
-	    {0, 1, 2, 3, 4, 5, 6, 7},
+	    {4, 1, 5, 0, 6, 7, 3, 2},
+	    {4, 0, 5, 1, 6, 7, 2, 3},
+	    {4, 1, 5, 0, 6, 7, 3, 2},
+	    {4, 0, 5, 1, 6, 7, 2, 3},
 		},
 	};
 	block_iter_id src_A[2][4][PatternLen] = {
 		{
-	    {{-1, -1, -1},{0, 1, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{0, 0, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{0, 3, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{0, 2, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 1, 6},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 0, 6},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 3, 6},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 2, 6},},
 		},
 		{
-	    {{-1, -1, -1},{1, 1, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{1, 0, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{1, 3, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{1, 2, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 1, 6},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 0, 6},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 3, 6},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 2, 6},},
 		},
 	};
 	block_iter_id src_B[2][4][PatternLen] = {
 		{
-	    {{-1, -1, -1},{1, 0, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{1, 1, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{1, 2, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{1, 3, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 0, 6},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 1, 6},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 2, 6},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 3, 6},},
 		},
 		{
-	    {{-1, -1, -1},{0, 0, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{0, 1, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{0, 2, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{0, 3, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 0, 6},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 1, 6},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 2, 6},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 3, 6},},
 		},
 	};
 	block_iter_id dst_A[2][4][PatternLen] = {
 		{
-	    {{0, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{0, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{0, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{0, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{0, 1, 3},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 1, 7},{-1, -1, -1},},
+	    {{-1, -1, -1},{0, 0, 3},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 0, 7},{-1, -1, -1},},
+	    {{-1, -1, -1},{0, 3, 3},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 3, 7},{-1, -1, -1},},
+	    {{-1, -1, -1},{0, 2, 3},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 2, 7},{-1, -1, -1},},
 		},
 		{
-	    {{1, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{1, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{1, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{1, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{1, 1, 3},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 1, 7},{-1, -1, -1},},
+	    {{-1, -1, -1},{1, 0, 3},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 0, 7},{-1, -1, -1},},
+	    {{-1, -1, -1},{1, 3, 3},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 3, 7},{-1, -1, -1},},
+	    {{-1, -1, -1},{1, 2, 3},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 2, 7},{-1, -1, -1},},
 		},
 	};
 	block_iter_id dst_B[2][4][PatternLen] = {
 		{
-	    {{1, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{1, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{1, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{1, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{1, 0, 3},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 0, 7},{-1, -1, -1},},
+	    {{-1, -1, -1},{1, 1, 3},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 1, 7},{-1, -1, -1},},
+	    {{-1, -1, -1},{1, 2, 3},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 2, 7},{-1, -1, -1},},
+	    {{-1, -1, -1},{1, 3, 3},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 3, 7},{-1, -1, -1},},
 		},
 		{
-	    {{0, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{0, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{0, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{0, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{0, 0, 3},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 0, 7},{-1, -1, -1},},
+	    {{-1, -1, -1},{0, 1, 3},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 1, 7},{-1, -1, -1},},
+	    {{-1, -1, -1},{0, 2, 3},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 2, 7},{-1, -1, -1},},
+	    {{-1, -1, -1},{0, 3, 3},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 3, 7},{-1, -1, -1},},
 		},
 	};
 
@@ -400,7 +403,8 @@ struct CollectiveMmaGen
       TensorB const& gB, TMA_LOAD_B& tma_load_b,
       KTileIterator k_tile_iter, int k_tile_count,
       int thread_idx,
-      int& receiver_ready_phase,
+      SepPipelineState receiver_ready_state_A,
+      SepPipelineState receiver_ready_state_B,
       int& sender_ready_phase,
       int& sender_dsmem_copy_finish_phase,
       int& receiver_dsmem_copy_finish_phase,
@@ -472,21 +476,19 @@ struct CollectiveMmaGen
 
         // Check if this stage was sender on iteration (k_iter - K_PIPE_MAX)
         // If true, wait until the copy is done
-        if ((k_iter - K_PIPE_MAX >= 0) && 
-           (dst_A[bid.x][bid.y][(k_iter - K_PIPE_MAX) % PatternLen].x != -1 && 
-            dst_A[bid.x][bid.y][(k_iter - K_PIPE_MAX) % PatternLen].y != -1)) {
-          pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eA, k_iter % PatternLen);
-        }
-        if ((k_iter - K_PIPE_MAX >= 0) && 
-           (dst_B[bid.x][bid.y][(k_iter - K_PIPE_MAX) % PatternLen].x != -1 && 
-            dst_B[bid.x][bid.y][(k_iter - K_PIPE_MAX) % PatternLen].y != -1)) {
-          pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eB, k_iter % PatternLen);
-        }
         if (src_id_A.x == -1 || src_id_A.y == -1) {
+          if (( dst_A[bid.x][bid.y][(k_iter - K_PIPE_MAX + PatternLen) % PatternLen].x != -1 && 
+                dst_A[bid.x][bid.y][(k_iter - K_PIPE_MAX + PatternLen) % PatternLen].y != -1)) {
+            pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eA, k_iter % PatternLen);
+          }
           // TMA load A from gmem to smem
           copy(tma_load_a.with(*tma_A_barrier, mcast_mask_a), tAgA(_,_,_,k_tile_iter_AB), tAsA(_,_,_,write_stage));
         }
         if (src_id_B.x == -1 || src_id_B.y == -1) {
+          if (( dst_B[bid.x][bid.y][(k_iter - K_PIPE_MAX + PatternLen) % PatternLen].x != -1 && 
+                dst_B[bid.x][bid.y][(k_iter - K_PIPE_MAX + PatternLen) % PatternLen].y != -1)) {
+            pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eB, k_iter % PatternLen);
+          }
           // TMA load B from gmem to smem
           copy(tma_load_b.with(*tma_B_barrier, mcast_mask_b), tBgB(_,_,_,k_tile_iter_AB), tBsB(_,_,_,write_stage));
         }
@@ -498,7 +500,7 @@ struct CollectiveMmaGen
         ++smem_pipe_write_physical;
         ++smem_pipe_write_logical;
 
-        if (k_iter % PatternLen == 0) {
+        if ((k_iter - K_PIPE_MAX + PatternLen) % PatternLen == 0) {
           sender_dsmem_copy_finish_phase ^= 1;
         }
       }
@@ -524,6 +526,24 @@ struct CollectiveMmaGen
       
       int k_iter = 0;
 
+      int sep_stage_A = 0;
+      int sep_stage_B = 0;
+      CUTLASS_PRAGMA_NO_UNROLL
+      for (int i=0; i<PatternLen; i++) {
+        if (dst_A[bid.x][bid.y][i].iter >= K_PIPE_MAX) {
+          break;
+        }
+        sep_stage_A = i;
+      }
+      for (int i=0; i<PatternLen; i++) {
+        if (dst_B[bid.x][bid.y][i].iter >= K_PIPE_MAX) {
+          break;
+        }
+        sep_stage_B = i;
+      }
+      receiver_ready_state_A.set_sep_stage(sep_stage_A);
+      receiver_ready_state_B.set_sep_stage(sep_stage_B);
+
       // Mainloop
       CUTLASS_PRAGMA_NO_UNROLL
       for ( ; k_tile_count > 0; --k_tile_count)
@@ -538,7 +558,7 @@ struct CollectiveMmaGen
         if (dst_id_A.x != -1 && dst_id_A.y != -1) {
           // wait sender buffer ready, may have bug (double consumer wait?)
           pipeline.sender_wait_sender_ready(sender_ready_phase, eA, k_iter % PatternLen);
-          pipeline.sender_wait_receiver_ready(receiver_ready_phase, eA, k_iter % PatternLen);
+          pipeline.sender_wait_receiver_ready(receiver_ready_state_A, eA);
           uint32_t block_id = dst_id_A.x + dst_id_A.y * size<0>(ClusterShape{});
           pipeline.dsmem_copy_prepare(TransactionBytesA, block_id, eA, dst_id_A.iter % PatternLen);
           BarrierType* tma_A_barrier = pipeline.producer_get_barrier_by_stage(dst_id_A.iter % PatternLen, eA);
@@ -552,7 +572,7 @@ struct CollectiveMmaGen
         if (dst_id_B.x != -1 && dst_id_B.y != -1) {
           // wait sender buffer ready, may have bug (double consumer wait?)
           pipeline.sender_wait_sender_ready(sender_ready_phase, eB, k_iter % PatternLen);
-          pipeline.sender_wait_receiver_ready(receiver_ready_phase, eB, k_iter % PatternLen);
+          pipeline.sender_wait_receiver_ready(receiver_ready_state_B, eB);
           uint32_t block_id = dst_id_B.x + dst_id_B.y * size<0>(ClusterShape{});
           pipeline.dsmem_copy_prepare(TransactionBytesB, block_id, eB, dst_id_B.iter % PatternLen);
           BarrierType* tma_B_barrier = pipeline.producer_get_barrier_by_stage(dst_id_B.iter % PatternLen, eB);
@@ -566,8 +586,9 @@ struct CollectiveMmaGen
 
         ++k_tile_iter;
         ++k_iter;
+        ++receiver_ready_state_A;
+        ++receiver_ready_state_B;
         if (k_iter % PatternLen == 0) {
-          receiver_ready_phase ^= 1;
           sender_ready_phase ^= 1;
         }
       }
@@ -1197,5 +1218,4 @@ int main(int argc, char const **args) {
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-
 

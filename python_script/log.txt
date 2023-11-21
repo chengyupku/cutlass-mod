@@ -1,12 +1,5 @@
 Passed:1, failed:0
 Launch config:
-  Grid    :(58, 2, 1)
-  Cluster :(2, 2, 1)
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
-Launch config:
-  Grid    :(58, 2, 1)
-  Cluster :(2, 2, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 14.4562 ms
-  GFLOPS: 608465

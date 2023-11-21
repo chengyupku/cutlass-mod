@@ -81,8 +81,16 @@ def search():
                             if tile_id < noc_group_pair_num * noc_group_size:
                                 # if not the first iteration (first iteration need to load data from gmem)
                                 if tile_id % noc_group_size != 0:
-                                    srcA = "blk(" + str(xid) + "," + str(((yid + 1) % noc_group_size) + (yid - yid % noc_group_size)) + ")"
-                                    srcB = "blk(" + str(((xid + 1) % noc_group_size) + (xid - xid % noc_group_size)) + "," + str(yid) + ")"
+                                    src_A_yid = (yid + 1) % noc_group_size
+                                    src_B_xid = (xid + 1) % noc_group_size
+                                    if (src_A_yid < cluster_y_size):
+                                        srcA = "blk(" + str(xid) + "," + str(src_A_yid + (yid - yid % noc_group_size)) + ")"
+                                    else:
+                                        srcA = "gmem"
+                                    if (src_B_xid < cluster_x_size):
+                                        srcB = "blk(" + str(src_B_xid + (xid - xid % noc_group_size)) + "," + str(yid) + ")"
+                                    else:
+                                        srcB = "gmem"
                                 tile_id = ((tile_id + xid + yid) % noc_group_size) + (tile_id - tile_id % noc_group_size)
                             schedule_per_blk.append({"tileid": tile_id, "srcA": srcA, "srcB": srcB})
                         schedule_per_x.append({

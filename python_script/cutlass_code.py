@@ -191,6 +191,7 @@ struct CollectiveMmaGen
                              typename DispatchPolicy::ClusterShape>;
   using PhysicalPipelineState = cutlass::PipelineState<DispatchPolicy::Stages>;
   using LogicalPipelineState = cutlass::PipelineState<PatternLen>;
+  using SepPipelineState = cutlass::SeparatePipelineState<PatternLen>;
 
   using PipelineParams = typename MainloopPipeline::Params;
 
@@ -228,7 +229,7 @@ struct CollectiveMmaGen
   static constexpr bool ConvertF32toTF32B = cute::is_same_v<float, ElementB>;
   using InternalElementA = cute::conditional_t<ConvertF32toTF32A, tfloat32_t, uint_bit_t<sizeof_bits_v<ElementA>>>;
   using InternalElementB = cute::conditional_t<ConvertF32toTF32B, tfloat32_t, uint_bit_t<sizeof_bits_v<ElementB>>>;
-  """
+"""
 
 collective_mma_code_1 = """
   struct SharedStorage
@@ -336,7 +337,8 @@ collective_mma_code_1 = """
       TensorB const& gB, TMA_LOAD_B& tma_load_b,
       KTileIterator k_tile_iter, int k_tile_count,
       int thread_idx,
-      int& receiver_ready_phase,
+      SepPipelineState receiver_ready_state_A,
+      SepPipelineState receiver_ready_state_B,
       int& sender_ready_phase,
       int& sender_dsmem_copy_finish_phase,
       int& receiver_dsmem_copy_finish_phase,
@@ -408,21 +410,19 @@ collective_mma_code_1 = """
 
         // Check if this stage was sender on iteration (k_iter - K_PIPE_MAX)
         // If true, wait until the copy is done
-        if ((k_iter - K_PIPE_MAX >= 0) && 
-           (dst_A[bid.x][bid.y][(k_iter - K_PIPE_MAX) % PatternLen].x != -1 && 
-            dst_A[bid.x][bid.y][(k_iter - K_PIPE_MAX) % PatternLen].y != -1)) {
-          pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eA, k_iter % PatternLen);
-        }
-        if ((k_iter - K_PIPE_MAX >= 0) && 
-           (dst_B[bid.x][bid.y][(k_iter - K_PIPE_MAX) % PatternLen].x != -1 && 
-            dst_B[bid.x][bid.y][(k_iter - K_PIPE_MAX) % PatternLen].y != -1)) {
-          pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eB, k_iter % PatternLen);
-        }
         if (src_id_A.x == -1 || src_id_A.y == -1) {
+          if (( dst_A[bid.x][bid.y][(k_iter - K_PIPE_MAX + PatternLen) % PatternLen].x != -1 && 
+                dst_A[bid.x][bid.y][(k_iter - K_PIPE_MAX + PatternLen) % PatternLen].y != -1)) {
+            pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eA, k_iter % PatternLen);
+          }
           // TMA load A from gmem to smem
           copy(tma_load_a.with(*tma_A_barrier, mcast_mask_a), tAgA(_,_,_,k_tile_iter_AB), tAsA(_,_,_,write_stage));
         }
         if (src_id_B.x == -1 || src_id_B.y == -1) {
+          if (( dst_B[bid.x][bid.y][(k_iter - K_PIPE_MAX + PatternLen) % PatternLen].x != -1 && 
+                dst_B[bid.x][bid.y][(k_iter - K_PIPE_MAX + PatternLen) % PatternLen].y != -1)) {
+            pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eB, k_iter % PatternLen);
+          }
           // TMA load B from gmem to smem
           copy(tma_load_b.with(*tma_B_barrier, mcast_mask_b), tBgB(_,_,_,k_tile_iter_AB), tBsB(_,_,_,write_stage));
         }
@@ -434,7 +434,7 @@ collective_mma_code_1 = """
         ++smem_pipe_write_physical;
         ++smem_pipe_write_logical;
 
-        if (k_iter % PatternLen == 0) {
+        if ((k_iter - K_PIPE_MAX + PatternLen) % PatternLen == 0) {
           sender_dsmem_copy_finish_phase ^= 1;
         }
       }
@@ -460,6 +460,25 @@ collective_mma_code_1 = """
       
       int k_iter = 0;
 
+      int sep_stage_A = 0;
+      int sep_stage_B = 0;
+      CUTLASS_PRAGMA_NO_UNROLL
+      for (int i=0; i<PatternLen; i++) {
+        sep_stage_A = i;
+        if (dst_A[bid.x][bid.y][i].iter >= K_PIPE_MAX) {
+          break;
+        }
+      }
+      CUTLASS_PRAGMA_NO_UNROLL
+      for (int i=0; i<PatternLen; i++) {
+        sep_stage_B = i;
+        if (dst_B[bid.x][bid.y][i].iter >= K_PIPE_MAX) {
+          break;
+        }
+      }
+      receiver_ready_state_A.set_sep_stage(sep_stage_A);
+      receiver_ready_state_B.set_sep_stage(sep_stage_B);
+
       // Mainloop
       CUTLASS_PRAGMA_NO_UNROLL
       for ( ; k_tile_count > 0; --k_tile_count)
@@ -474,7 +493,7 @@ collective_mma_code_1 = """
         if (dst_id_A.x != -1 && dst_id_A.y != -1) {
           // wait sender buffer ready, may have bug (double consumer wait?)
           pipeline.sender_wait_sender_ready(sender_ready_phase, eA, k_iter % PatternLen);
-          pipeline.sender_wait_receiver_ready(receiver_ready_phase, eA, k_iter % PatternLen);
+          pipeline.sender_wait_receiver_ready(receiver_ready_state_A, eA);
           uint32_t block_id = dst_id_A.x + dst_id_A.y * size<0>(ClusterShape{});
           pipeline.dsmem_copy_prepare(TransactionBytesA, block_id, eA, dst_id_A.iter % PatternLen);
           BarrierType* tma_A_barrier = pipeline.producer_get_barrier_by_stage(dst_id_A.iter % PatternLen, eA);
@@ -488,7 +507,7 @@ collective_mma_code_1 = """
         if (dst_id_B.x != -1 && dst_id_B.y != -1) {
           // wait sender buffer ready, may have bug (double consumer wait?)
           pipeline.sender_wait_sender_ready(sender_ready_phase, eB, k_iter % PatternLen);
-          pipeline.sender_wait_receiver_ready(receiver_ready_phase, eB, k_iter % PatternLen);
+          pipeline.sender_wait_receiver_ready(receiver_ready_state_B, eB);
           uint32_t block_id = dst_id_B.x + dst_id_B.y * size<0>(ClusterShape{});
           pipeline.dsmem_copy_prepare(TransactionBytesB, block_id, eB, dst_id_B.iter % PatternLen);
           BarrierType* tma_B_barrier = pipeline.producer_get_barrier_by_stage(dst_id_B.iter % PatternLen, eB);
@@ -502,8 +521,9 @@ collective_mma_code_1 = """
 
         ++k_tile_iter;
         ++k_iter;
+        ++receiver_ready_state_A;
+        ++receiver_ready_state_B;
         if (k_iter % PatternLen == 0) {
-          receiver_ready_phase ^= 1;
           sender_ready_phase ^= 1;
         }
       }

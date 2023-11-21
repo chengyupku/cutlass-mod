@@ -29,7 +29,18 @@
 
 
 
-cutlass_example_add_executable(
-  97_gemm_codegen
-  97_gemm_codegen.cu
-  )
+# cutlass_example_add_executable(
+#   97_gemm_codegen
+#   97_gemm_codegen.cu
+#   )
+
+file(GLOB cuda_sources "*_gemm_codegen.cu")
+
+foreach(cuda_source ${cuda_sources})
+  get_filename_component(base_name ${cuda_source} NAME)
+  string(REPLACE ".cu" "" exec_name ${base_name})
+  set(codegen_target "${exec_name}")
+  set(codegen_source "${base_name}")
+  message("cutlass_example_add_executable(${codegen_target} ${codegen_source})")
+  cutlass_example_add_executable(${codegen_target} ${codegen_source})
+endforeach()

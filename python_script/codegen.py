@@ -2,11 +2,11 @@ import json
 import cutlass_code
 
 valid_cluster_shape = [1, 2, 4, 8, 16]
-cluster_shape = [2, 2, 1]
+cluster_shape = [2, 4, 1]
 PatternLen = 8
-assert (cs in valid_cluster_shape for cs in cluster_shape) and (cluster_shape[0] * cluster_shape[1] * cluster_shape[2] < 16), "Invalid cluster shape!"
-ClusterShape_code = "using ClusterShape = Shape<_{},_{},_{}>; // Shape of the threadblocks in a cluster".format(cluster_shape[0], cluster_shape[1], cluster_shape[2])
-PatternLen_code = "static constexpr int PatternLen = {};".format(PatternLen)
+assert (cs in valid_cluster_shape for cs in cluster_shape) and (cluster_shape[0] * cluster_shape[1] * cluster_shape[2] <= 16), "Invalid cluster shape!"
+ClusterShape_code = "using ClusterShape = Shape<_{},_{},_{}>; // Shape of the threadblocks in a cluster\n".format(cluster_shape[0], cluster_shape[1], cluster_shape[2])
+PatternLen_code = "static constexpr int PatternLen = {};\n".format(PatternLen)
 
 
 def generate_int_array(l):
@@ -21,11 +21,12 @@ def generate_dim3_array(l):
     
 def gen_tile_order_code(l, sA, sB, dA, dB):
     code = ""
-    tile_order_code = "\tint8_t tile_order[2][4][PatternLen] = {\n"
-    src_A_code = "\tblock_iter_id src_A[2][4][PatternLen] = {\n"
-    src_B_code = "\tblock_iter_id src_B[2][4][PatternLen] = {\n"
-    dst_A_code = "\tblock_iter_id dst_A[2][4][PatternLen] = {\n"
-    dst_B_code = "\tblock_iter_id dst_B[2][4][PatternLen] = {\n"
+    array_shape = "[{}][{}][PatternLen]".format(cluster_shape[0], cluster_shape[1])
+    tile_order_code = "\tint8_t tile_order" + array_shape + " = {\n"
+    src_A_code = "\tblock_iter_id src_A" + array_shape + " = {\n"
+    src_B_code = "\tblock_iter_id src_B" + array_shape + " = {\n"
+    dst_A_code = "\tblock_iter_id dst_A" + array_shape + " = {\n"
+    dst_B_code = "\tblock_iter_id dst_B" + array_shape + " = {\n"
     # code += "if (bid.x == 0) {\n"
     for x, [x_l_group, x_sA_group, x_sB_group, x_dA_group, x_dB_group] in enumerate(zip(l, sA, sB, dA, dB)):
         tile_order_code += "\t\t{\n"
@@ -69,51 +70,57 @@ def parse_src(s):
 if __name__ == '__main__':
     with open('schedule.json', 'r', encoding='utf-8') as file:
         schedule_list = json.load(file)
-    schedule = schedule_list[0]["schedule"]
-    # print(schedule)
-    schedule_per_blk = [[item['schedule_per_blk'] for item in x_list] for x_list in schedule]
-    tileid = [[[item['tileid'] for item in y_list] for y_list in x_list] for x_list in schedule_per_blk]
-    # dst_A/B: [x,y,i], the tile will be used by block(x,y) on iteration i + N * PatternLen
-    # src_A/B: [x,y,i], the tile comes from block(x,y) on its iteration  i + N * PatternLen
-    src_A  = [[[parse_src(item['srcA']) for item in y_list] for y_list in x_list] for x_list in schedule_per_blk]
-    src_B  = [[[parse_src(item['srcB']) for item in y_list] for y_list in x_list] for x_list in schedule_per_blk]
-    dst_A  = [[[[-1,-1,-1] for _ in y_list] for y_list in x_list] for x_list in src_A]
-    dst_B  = [[[[-1,-1,-1] for _ in y_list] for y_list in x_list] for x_list in src_B]
 
-    # Generate sender list dst_A/B[x][y][k]: tile on block[x][y] at iteration k will send to ...
-    for dx, [x_list_A, x_list_B] in enumerate(zip(src_A, src_B)):
-        for dy, [y_list_A, y_list_B] in enumerate(zip(x_list_A, x_list_B)):
-            for k, [item_A, item_B] in enumerate(zip(y_list_A, y_list_B)):
-                xA, yA, _ = item_A
-                xB, yB, _ = item_B
-                if (xA != -1 and yA != -1):
-                    src_k = tileid[xA][yA].index(tileid[dx][dy][k])
-                    dst_A[xA][yA][src_k] = [dx, dy, k]
-                if (xB != -1 and yB != -1):
-                    src_k = tileid[xB][yB].index(tileid[dx][dy][k])
-                    dst_B[xB][yB][src_k] = [dx, dy, k]
+    for sid in range(len(schedule_list)):
+        schedule = schedule_list[sid]["schedule"]
+        # print(schedule)
+        schedule_per_blk = [[item['schedule_per_blk'] for item in x_list] for x_list in schedule]
+        tileid = [[[item['tileid'] for item in y_list] for y_list in x_list] for x_list in schedule_per_blk]
+        # dst_A/B: [x,y,i], the tile will be used by block(x,y) on iteration i + N * PatternLen
+        # src_A/B: [x,y,i], the tile comes from block(x,y) on its iteration  i + N * PatternLen
+        src_A  = [[[parse_src(item['srcA']) for item in y_list] for y_list in x_list] for x_list in schedule_per_blk]
+        src_B  = [[[parse_src(item['srcB']) for item in y_list] for y_list in x_list] for x_list in schedule_per_blk]
+        dst_A  = [[[[-1,-1,-1] for _ in y_list] for y_list in x_list] for x_list in src_A]
+        dst_B  = [[[[-1,-1,-1] for _ in y_list] for y_list in x_list] for x_list in src_B]
 
-    for dx, [x_list_A, x_list_B] in enumerate(zip(dst_A, dst_B)):
-        for dy, [y_list_A, y_list_B] in enumerate(zip(x_list_A, x_list_B)):
-            for k, [item_A, item_B] in enumerate(zip(y_list_A, y_list_B)):
-                xA, yA, dst_Ak = item_A
-                xB, yB, dst_Bk = item_B
-                if (xA != -1 and yA != -1):
-                    src_A[xA][yA][dst_Ak][-1] = k
-                if (xB != -1 and yB != -1):
-                    src_B[xB][yB][dst_Bk][-1] = k
+        # print("tileid", tileid)
+        # print("src_A", src_A)
+        # print("src_B", src_B)
+        # print("dst_A", dst_A)
+        # print("dst_B", dst_B)
 
-    # print(dst_A)
-    # print(dst_B)
-    # print(tileid)
-    # print(src_A)
-    # print(src_B)
+        # Generate sender list dst_A/B[x][y][k]: tile on block[x][y] at iteration k will send to ...
+        for dx, [x_list_A, x_list_B] in enumerate(zip(src_A, src_B)):
+            for dy, [y_list_A, y_list_B] in enumerate(zip(x_list_A, x_list_B)):
+                for k, [item_A, item_B] in enumerate(zip(y_list_A, y_list_B)):
+                    xA, yA, _ = item_A
+                    xB, yB, _ = item_B
+                    if (xA != -1 and yA != -1):
+                        src_k = tileid[xA][yA].index(tileid[dx][dy][k])
+                        dst_A[xA][yA][src_k] = [dx, dy, k]
+                    if (xB != -1 and yB != -1):
+                        src_k = tileid[xB][yB].index(tileid[dx][dy][k])
+                        dst_B[xB][yB][src_k] = [dx, dy, k]
 
-    code = ""
-    code += cutlass_code.header_0
-    code += cutlass_code.header_1
-    code += cutlass_code.collective_mma_code_0
-    code += gen_tile_order_code(tileid, src_A, src_B, dst_A, dst_B)
-    code += cutlass_code.collective_mma_code_1
-    code += cutlass_code.tail
-    print(code)
+        for dx, [x_list_A, x_list_B] in enumerate(zip(dst_A, dst_B)):
+            for dy, [y_list_A, y_list_B] in enumerate(zip(x_list_A, x_list_B)):
+                for k, [item_A, item_B] in enumerate(zip(y_list_A, y_list_B)):
+                    xA, yA, dst_Ak = item_A
+                    xB, yB, dst_Bk = item_B
+                    if (xA != -1 and yA != -1):
+                        src_A[xA][yA][dst_Ak][-1] = k
+                    if (xB != -1 and yB != -1):
+                        src_B[xB][yB][dst_Bk][-1] = k
+
+        code = ""
+        code += cutlass_code.header_0
+        code += ClusterShape_code
+        code += PatternLen_code
+        code += cutlass_code.header_1
+        code += cutlass_code.collective_mma_code_0
+        code += gen_tile_order_code(tileid, src_A, src_B, dst_A, dst_B)
+        code += cutlass_code.collective_mma_code_1
+        code += cutlass_code.tail
+        # print(code)
+        with open('../examples/97_gemm_codegen/{}_gemm_codegen.cu'.format(sid), 'w') as file:
+            print(code, file=file)
