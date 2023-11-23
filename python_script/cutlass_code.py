@@ -411,16 +411,16 @@ collective_mma_code_1 = """
         // Check if this stage was sender on iteration (k_iter - K_PIPE_MAX)
         // If true, wait until the copy is done
         if (src_id_A.x == -1 || src_id_A.y == -1) {
-          if (( dst_A[bid.x][bid.y][(k_iter - K_PIPE_MAX + PatternLen) % PatternLen].x != -1 && 
-                dst_A[bid.x][bid.y][(k_iter - K_PIPE_MAX + PatternLen) % PatternLen].y != -1)) {
+          if (( dst_A[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].x != -1 && 
+                dst_A[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].y != -1)) {
             pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eA, k_iter % PatternLen);
           }
           // TMA load A from gmem to smem
           copy(tma_load_a.with(*tma_A_barrier, mcast_mask_a), tAgA(_,_,_,k_tile_iter_AB), tAsA(_,_,_,write_stage));
         }
         if (src_id_B.x == -1 || src_id_B.y == -1) {
-          if (( dst_B[bid.x][bid.y][(k_iter - K_PIPE_MAX + PatternLen) % PatternLen].x != -1 && 
-                dst_B[bid.x][bid.y][(k_iter - K_PIPE_MAX + PatternLen) % PatternLen].y != -1)) {
+          if (( dst_B[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].x != -1 && 
+                dst_B[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].y != -1)) {
             pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eB, k_iter % PatternLen);
           }
           // TMA load B from gmem to smem
@@ -434,7 +434,7 @@ collective_mma_code_1 = """
         ++smem_pipe_write_physical;
         ++smem_pipe_write_logical;
 
-        if ((k_iter - K_PIPE_MAX + PatternLen) % PatternLen == 0) {
+        if (((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen == 0) {
           sender_dsmem_copy_finish_phase ^= 1;
         }
       }
@@ -644,6 +644,7 @@ collective_mma_code_1 = """
     tiled_mma.accumulate_ = GMMA::ScaleOut::Zero;
 
     dim3 bid = cute::block_id_in_cluster();
+    int k_iter = 0;
 
     warpgroup_fence_operand(accum);
     CUTLASS_PRAGMA_UNROLL
@@ -652,7 +653,7 @@ collective_mma_code_1 = """
       // WAIT on smem_pipe_read_physical until its data are available (phase bit flips from rdPhaseBit value)
       pipeline.consumer_wait(smem_pipe_read_logical);
 
-      int read_stage = smem_pipe_read_logical.index() % K_PIPE_MAX;
+      int read_stage = k_iter % K_PIPE_MAX;
       warpgroup_arrive();
       // Unroll the K mode manually to set scale D to 1
       CUTLASS_PRAGMA_UNROLL
@@ -666,6 +667,7 @@ collective_mma_code_1 = """
 
       ++smem_pipe_read_physical;
       ++smem_pipe_read_logical;
+      ++k_iter;
     }
 
     warpgroup_fence_operand(accum);
@@ -683,7 +685,7 @@ collective_mma_code_1 = """
       // Compute on k_tile
       //
 
-      int read_stage = smem_pipe_read_logical.index() % K_PIPE_MAX;
+      int read_stage = k_iter % K_PIPE_MAX;
       warpgroup_fence_operand(accum);
       warpgroup_arrive();
       // Unroll the K mode manually to set scale D to 1
@@ -720,6 +722,7 @@ collective_mma_code_1 = """
       ++smem_pipe_read_logical;
       ++smem_pipe_release;
       ++k_release_iter;
+      ++k_iter;
     }
 
     warpgroup_fence_operand(accum);

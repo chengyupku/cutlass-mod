@@ -486,6 +486,9 @@ public:
         }
         #endif
       } // Scheduler work fetch loop
+      if (threadIdx.x==0) {
+        printf("(%d,%d) load finish\n", blockIdx.x, blockIdx.y);
+      }
       // Make sure all Consumer Warp Groups have been waited upon
       collective_mainloop.load_tail(mainloop_pipeline);
       if (collective_epilogue.is_source_needed()) {
