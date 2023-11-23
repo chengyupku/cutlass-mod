@@ -61,6 +61,37 @@ __global__ void BlockCompareEqual(
 
   size_t idx = threadIdx.x + blockDim.x * blockIdx.x;
 
+  // if (blockIdx.x==0 && blockIdx.y==0 && blockIdx.z==0 && threadIdx.x==0) {
+  //   // print_type(cutlass::ReferenceFactory<Element>::get(ptr_A, threadIdx.x + blockDim.x * blockIdx.x));
+  //   int cnt = 0;
+  //   printf("a:\n");
+  //   for (; idx < capacity; idx += gridDim.x * blockDim.x) {
+  //     Element a = cutlass::ReferenceFactory<Element>::get(ptr_A, idx);
+  //     printf("%.2f ", half_t::convert(a));
+  //     cnt++;
+  //     if (cnt % 16 == 0) {
+  //       printf("\n");
+  //     }
+  //     if (cnt == 64) {
+  //       break;
+  //     }
+  //   }
+  //   cnt = 0;
+  //   idx = threadIdx.x + blockDim.x * blockIdx.x;
+  //   printf("b:\n");
+  //   for (; idx < capacity; idx += gridDim.x * blockDim.x) {
+  //     Element b = cutlass::ReferenceFactory<Element>::get(ptr_B, idx);
+  //     printf("%.2f ", half_t::convert(b));
+  //     cnt++;
+  //     if (cnt % 16 == 0) {
+  //       printf("\n");
+  //     }
+  //     if (cnt == 64) {
+  //       break;
+  //     }
+  //   }
+  // }
+  idx = threadIdx.x + blockDim.x * blockIdx.x;
   for (; idx < capacity; idx += gridDim.x * blockDim.x) {
 
     Element a = cutlass::ReferenceFactory<Element>::get(ptr_A, idx);

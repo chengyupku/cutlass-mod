@@ -2,3 +2,4 @@
 __pycache__/
 build/
 *.txt
+examples/97_gemm_codegen/*.cu

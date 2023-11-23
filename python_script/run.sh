@@ -2,8 +2,8 @@
 
 log_file="execution_log.txt"
 output_log_file="output_log.txt"
-> log_file
-> output_log_file
+> "$log_file"
+> "$output_log_file"
 
 for index in $(seq 0 81); do
     executable="${index}_gemm_codegen"
