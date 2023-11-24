@@ -37,8 +37,8 @@
 #include "cute/numeric/arithmetic_tuple.hpp"
 #include "cutlass/pipeline/pipeline.hpp"
 
-#include "async_pipeline.hpp"
-#include "gemm_kernel.hpp"
+#include "codegen_include/async_pipeline.hpp"
+#include "codegen_include/gemm_kernel.hpp"
 
 #include "helper.h"
 
@@ -76,7 +76,7 @@ using TileShape           = Shape<_128,_256,_64>;                           // T
 using StageCountType = cutlass::gemm::collective::StageCountAuto;           // Stage count maximized based on the tile size
 using KernelSchedule = cutlass::gemm::collective::KernelScheduleAuto;       // Kernel to launch based on the default setting in the Collective Builder 
 using ClusterShape = Shape<_2,_4,_1>; // Shape of the threadblocks in a cluster
-static constexpr int PatternLen = 6;
+static constexpr int PatternLen = 4;
 
 using CollectiveEpilogue = typename cutlass::epilogue::collective::CollectiveBuilder<
     cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp,
@@ -115,9 +115,11 @@ using SmemLayoutAtomA = decltype(cutlass::gemm::collective::detail::ss_smem_sele
 using SmemLayoutAtomB = decltype(cutlass::gemm::collective::detail::ss_smem_selector<
     GmmaMajorB, MmaElementB, decltype(cute::get<1>(TileShape{})), decltype(cute::get<2>(TileShape{}))>());
 
-static constexpr int PipelineStages = cutlass::gemm::collective::detail::compute_stage_count_or_override<cutlass::gemm::collective::detail::sm90_smem_capacity_bytes,
-    MmaElementA, MmaElementB, TileShape>(cutlass::gemm::collective::StageCountAutoCarveout<
-    sizeof(typename CollectiveEpilogue::SharedStorage)>{});
+// static constexpr int PipelineStages = cutlass::gemm::collective::detail::compute_stage_count_or_override<cutlass::gemm::collective::detail::sm90_smem_capacity_bytes,
+//     MmaElementA, MmaElementB, TileShape>(cutlass::gemm::collective::StageCountAutoCarveout<
+//     sizeof(typename CollectiveEpilogue::SharedStorage)>{});
+
+static constexpr int PipelineStages = 3;
 
 using DispatchPolicy = cutlass::gemm::MainloopSm90TmaGmmaWarpSpecializedDSMEM<
     PipelineStages, ClusterShape, cutlass::gemm::KernelTmaWarpSpecializedCooperativeDSMEM>;
@@ -229,74 +231,144 @@ struct CollectiveMmaGen
   using InternalElementB = cute::conditional_t<ConvertF32toTF32B, tfloat32_t, uint_bit_t<sizeof_bits_v<ElementB>>>;
 	int8_t tile_order[2][4][PatternLen] = {
 		{
-	    {0, 1, 2, 3, 4, 5},
-	    {1, 0, 2, 3, 4, 5},
-	    {0, 1, 2, 3, 4, 5},
-	    {1, 0, 2, 3, 4, 5},
+	    {0, 1, 2, 3},
+	    {1, 0, 2, 3},
+	    {0, 1, 2, 3},
+	    {1, 0, 2, 3},
 		},
 		{
-	    {1, 0, 2, 3, 4, 5},
-	    {0, 1, 2, 3, 4, 5},
-	    {1, 0, 2, 3, 4, 5},
-	    {0, 1, 2, 3, 4, 5},
+	    {1, 0, 2, 3},
+	    {0, 1, 2, 3},
+	    {1, 0, 2, 3},
+	    {0, 1, 2, 3},
 		},
 	};
 	block_iter_id src_A[2][4][PatternLen] = {
 		{
-	    {{-1, -1, -1},{0, 1, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{-1, -1, -1},{0, 0, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{-1, -1, -1},{0, 3, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{-1, -1, -1},{0, 2, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{-1, -1, -1},{0, 1, 0},{-1, -1, -1},{-1, -1, -1}},
+	    {{-1, -1, -1},{0, 0, 0},{-1, -1, -1},{-1, -1, -1}},
+	    {{-1, -1, -1},{0, 3, 0},{-1, -1, -1},{-1, -1, -1}},
+	    {{-1, -1, -1},{0, 2, 0},{-1, -1, -1},{-1, -1, -1}},
 		},
 		{
-	    {{-1, -1, -1},{1, 1, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{-1, -1, -1},{1, 0, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{-1, -1, -1},{1, 3, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{-1, -1, -1},{1, 2, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{-1, -1, -1},{1, 1, 0},{-1, -1, -1},{-1, -1, -1}},
+	    {{-1, -1, -1},{1, 0, 0},{-1, -1, -1},{-1, -1, -1}},
+	    {{-1, -1, -1},{1, 3, 0},{-1, -1, -1},{-1, -1, -1}},
+	    {{-1, -1, -1},{1, 2, 0},{-1, -1, -1},{-1, -1, -1}},
 		},
 	};
 	block_iter_id src_B[2][4][PatternLen] = {
 		{
-	    {{-1, -1, -1},{1, 0, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{-1, -1, -1},{1, 1, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{-1, -1, -1},{1, 2, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{-1, -1, -1},{1, 3, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{-1, -1, -1},{1, 0, 0},{-1, -1, -1},{-1, -1, -1}},
+	    {{-1, -1, -1},{1, 1, 0},{-1, -1, -1},{-1, -1, -1}},
+	    {{-1, -1, -1},{1, 2, 0},{-1, -1, -1},{-1, -1, -1}},
+	    {{-1, -1, -1},{1, 3, 0},{-1, -1, -1},{-1, -1, -1}},
 		},
 		{
-	    {{-1, -1, -1},{0, 0, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{-1, -1, -1},{0, 1, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{-1, -1, -1},{0, 2, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{-1, -1, -1},{0, 3, 0},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{-1, -1, -1},{0, 0, 0},{-1, -1, -1},{-1, -1, -1}},
+	    {{-1, -1, -1},{0, 1, 0},{-1, -1, -1},{-1, -1, -1}},
+	    {{-1, -1, -1},{0, 2, 0},{-1, -1, -1},{-1, -1, -1}},
+	    {{-1, -1, -1},{0, 3, 0},{-1, -1, -1},{-1, -1, -1}},
 		},
 	};
 	block_iter_id dst_A[2][4][PatternLen] = {
 		{
-	    {{0, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{0, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{0, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{0, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{0, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{0, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{0, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{0, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
 		},
 		{
-	    {{1, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{1, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{1, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{1, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{1, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{1, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{1, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{1, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
 		},
 	};
 	block_iter_id dst_B[2][4][PatternLen] = {
 		{
-	    {{1, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{1, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{1, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{1, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{1, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{1, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{1, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{1, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
 		},
 		{
-	    {{0, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{0, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{0, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
-	    {{0, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{0, 0, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{0, 1, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{0, 2, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	    {{0, 3, 1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
 		},
 	};
+  // int8_t tile_order[2][4][PatternLen] = {
+	// 	{
+	//     {0, 1, 2, 3},
+	//     {0, 1, 2, 3},
+	//     {0, 1, 2, 3},
+	//     {0, 1, 2, 3},
+	// 	},
+	// 	{
+	//     {0, 1, 2, 3},
+	//     {0, 1, 2, 3},
+	//     {0, 1, 2, 3},
+	//     {0, 1, 2, 3},
+	// 	},
+	// };
+	// block_iter_id src_A[2][4][PatternLen] = {
+	// 	{
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	// 	},
+	// 	{
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	// 	},
+	// };
+	// block_iter_id src_B[2][4][PatternLen] = {
+	// 	{
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	// 	},
+	// 	{
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	// 	},
+	// };
+	// block_iter_id dst_A[2][4][PatternLen] = {
+	// 	{
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	// 	},
+	// 	{
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	// 	},
+	// };
+	// block_iter_id dst_B[2][4][PatternLen] = {
+	// 	{
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	// 	},
+	// 	{
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	//     {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}},
+	// 	},
+	// };
   // int8_t tile_order[2][4][PatternLen] = {
 	// 	{
 	//     {0, 1, 2, 3, 4, 5},
@@ -540,6 +612,7 @@ struct CollectiveMmaGen
       MainloopPipeline pipeline, 
       PhysicalPipelineState smem_pipe_write_physical,
       LogicalPipelineState smem_pipe_write_logical,
+      PhysicalPipelineState smem_pipe_dsmem_send,
       TensorA const& gA, TMA_LOAD_A& tma_load_a,
       TensorB const& gB, TMA_LOAD_B& tma_load_b,
       KTileIterator k_tile_iter, int k_tile_count,
@@ -589,7 +662,12 @@ struct CollectiveMmaGen
       int k_iter = 0;
 
 
+      // previous tile loop: last iteration logical pipeline goes (k_tile_count % PatternLen) steps
 
+      // for (int i = 0; i < K_PIPE_MAX; i++) {
+
+      // }
+      
       // Mainloop
       CUTLASS_PRAGMA_NO_UNROLL
       for ( ; k_tile_count > 0; --k_tile_count)
@@ -699,8 +777,8 @@ struct CollectiveMmaGen
         using BarrierType = typename MainloopPipeline::ProducerBarrierType;
         block_iter_id dst_id_A = dst_A[bid.x][bid.y][k_iter % PatternLen];
         block_iter_id dst_id_B = dst_B[bid.x][bid.y][k_iter % PatternLen];
-        int dst_A_stage = dst_id_A.iter % K_PIPE_MAX;
-        int dst_B_stage = dst_id_B.iter % K_PIPE_MAX;
+        int dst_A_stage = (dst_id_A.iter - (k_iter % PatternLen) + smem_pipe_dsmem_send.index()) % K_PIPE_MAX;
+        int dst_B_stage = (dst_id_B.iter - (k_iter % PatternLen) + smem_pipe_dsmem_send.index()) % K_PIPE_MAX;
 
         // wait receiver's arrive
         if (dst_id_A.x != -1 && dst_id_A.y != -1) {
@@ -711,7 +789,7 @@ struct CollectiveMmaGen
           pipeline.dsmem_copy_prepare(TransactionBytesA, block_id, eA, dst_id_A.iter % PatternLen);
           BarrierType* tma_A_barrier = pipeline.producer_get_barrier_by_stage(dst_id_A.iter % PatternLen, eA);
           dsmem_copy_func(block_id,
-                          tAsA(_,_,_,k_iter % K_PIPE_MAX).data().get(), 
+                          tAsA(_,_,_,smem_pipe_dsmem_send.index()).data().get(), 
                           tAsA(_,_,_,dst_A_stage).data().get(), 
                           tma_A_barrier, 
                           TransactionBytesA
@@ -725,7 +803,7 @@ struct CollectiveMmaGen
           pipeline.dsmem_copy_prepare(TransactionBytesB, block_id, eB, dst_id_B.iter % PatternLen);
           BarrierType* tma_B_barrier = pipeline.producer_get_barrier_by_stage(dst_id_B.iter % PatternLen, eB);
           dsmem_copy_func(block_id,
-                          tBsB(_,_,_,k_iter % K_PIPE_MAX).data().get(), 
+                          tBsB(_,_,_,smem_pipe_dsmem_send.index()).data().get(), 
                           tBsB(_,_,_,dst_B_stage).data().get(), 
                           tma_B_barrier, 
                           TransactionBytesB
@@ -736,6 +814,7 @@ struct CollectiveMmaGen
         ++k_iter;
         ++receiver_ready_state_A;
         ++receiver_ready_state_B;
+        ++smem_pipe_dsmem_send;
         if (k_iter % PatternLen == 0) {
           sender_ready_phase ^= 1;
         }
@@ -860,7 +939,6 @@ struct CollectiveMmaGen
     tiled_mma.accumulate_ = GMMA::ScaleOut::Zero;
 
     dim3 bid = cute::block_id_in_cluster();
-    int k_iter = 0;
 
     warpgroup_fence_operand(accum);
     CUTLASS_PRAGMA_UNROLL
@@ -869,7 +947,7 @@ struct CollectiveMmaGen
       // WAIT on smem_pipe_read_physical until its data are available (phase bit flips from rdPhaseBit value)
       pipeline.consumer_wait(smem_pipe_read_logical);
 
-      int read_stage = k_iter % K_PIPE_MAX;
+      int read_stage = smem_pipe_read_physical.index();
       warpgroup_arrive();
       // Unroll the K mode manually to set scale D to 1
       CUTLASS_PRAGMA_UNROLL
@@ -883,7 +961,6 @@ struct CollectiveMmaGen
 
       ++smem_pipe_read_physical;
       ++smem_pipe_read_logical;
-      ++k_iter;
     }
 
     warpgroup_fence_operand(accum);
@@ -901,7 +978,7 @@ struct CollectiveMmaGen
       // Compute on k_tile
       //
 
-      int read_stage = k_iter % K_PIPE_MAX;
+      int read_stage = smem_pipe_read_physical.index();
       warpgroup_fence_operand(accum);
       warpgroup_arrive();
       // Unroll the K mode manually to set scale D to 1
@@ -938,7 +1015,6 @@ struct CollectiveMmaGen
       ++smem_pipe_read_logical;
       ++smem_pipe_release;
       ++k_release_iter;
-      ++k_iter;
     }
 
     warpgroup_fence_operand(accum);
@@ -950,9 +1026,9 @@ struct CollectiveMmaGen
   mma_tail( MainloopPipeline pipeline, 
             PhysicalPipelineState smem_pipe_release, 
             int k_tile_count) {
-    if (threadIdx.x==128) {
-      printf("(%d,%d) in mma_tail\n", blockIdx.x, blockIdx.y);
-    }
+    // if (threadIdx.x==128) {
+    //   printf("(%d,%d) in mma_tail\n", blockIdx.x, blockIdx.y);
+    // }
     // Prologue GMMAs
     int prologue_mma_count = min(K_PIPE_MMAS, k_tile_count);
     k_tile_count -= prologue_mma_count;
@@ -983,9 +1059,9 @@ struct CollectiveMmaGen
       pipeline.consumer_release(smem_pipe_release, eB);
       ++smem_pipe_release;
     }
-    if (threadIdx.x==128) {
-      printf("(%d,%d) mma_tail_done\n", blockIdx.x, blockIdx.y);
-    }
+    // if (threadIdx.x==128) {
+    //   printf("(%d,%d) mma_tail_done\n", blockIdx.x, blockIdx.y);
+    // }
   }
 
   CUTLASS_DEVICE void

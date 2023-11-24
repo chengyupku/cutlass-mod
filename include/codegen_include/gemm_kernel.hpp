@@ -343,6 +343,7 @@ public:
     // i.e., we skip all waits since we know that the buffer is indeed empty
     // PipelineState on a physical pipeline (length = K_MAX_PIPE)
     PipelineState mainloop_pipe_producer_physical_state = cutlass::make_producer_start_state<MainloopPipeline>();
+    PipelineState mainloop_pipe_producer_dsmem_send_state = cutlass::make_producer_start_state<MainloopPipeline>();
     PipelineState epi_load_pipe_producer_state = cutlass::make_producer_start_state<EpiLoadPipeline>();
     PipelineState epi_store_pipe_producer_state = cutlass::make_producer_start_state<EpiStorePipeline>();
     // PipelineState on a logical pipeline (length = PatternLen)
@@ -434,6 +435,7 @@ public:
           mainloop_pipeline,
           mainloop_pipe_producer_physical_state,
           mainloop_pipe_producer_logical_state,
+          mainloop_pipe_producer_dsmem_send_state,
           gA, params.mainloop.tma_load_a,
           gB, params.mainloop.tma_load_b,
           k_tile_iter, k_tile_count,
@@ -454,6 +456,7 @@ public:
         // Update starting pipeline state for the next tile
         mainloop_pipe_producer_physical_state.advance(k_tile_count);
         mainloop_pipe_producer_logical_state.advance(k_tile_count);
+        mainloop_pipe_producer_dsmem_send_state.advance(k_tile_count);
         receiver_ready_state_A.advance(k_tile_count);
         receiver_ready_state_B.advance(k_tile_count);
 
@@ -486,9 +489,6 @@ public:
         }
         #endif
       } // Scheduler work fetch loop
-      if (threadIdx.x==0) {
-        printf("(%d,%d) load finish\n", blockIdx.x, blockIdx.y);
-      }
       // Make sure all Consumer Warp Groups have been waited upon
       collective_mainloop.load_tail(mainloop_pipeline);
       if (collective_epilogue.is_source_needed()) {

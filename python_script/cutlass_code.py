@@ -37,8 +37,8 @@ header_0 = """
 #include "cute/numeric/arithmetic_tuple.hpp"
 #include "cutlass/pipeline/pipeline.hpp"
 
-#include "async_pipeline.hpp"
-#include "gemm_kernel.hpp"
+#include "codegen_include/async_pipeline.hpp"
+#include "codegen_include/gemm_kernel.hpp"
 
 #include "helper.h"
 
@@ -333,6 +333,7 @@ collective_mma_code_1 = """
       MainloopPipeline pipeline, 
       PhysicalPipelineState smem_pipe_write_physical,
       LogicalPipelineState smem_pipe_write_logical,
+      PhysicalPipelineState smem_pipe_dsmem_send,
       TensorA const& gA, TMA_LOAD_A& tma_load_a,
       TensorB const& gB, TMA_LOAD_B& tma_load_b,
       KTileIterator k_tile_iter, int k_tile_count,
@@ -486,8 +487,8 @@ collective_mma_code_1 = """
         using BarrierType = typename MainloopPipeline::ProducerBarrierType;
         block_iter_id dst_id_A = dst_A[bid.x][bid.y][k_iter % PatternLen];
         block_iter_id dst_id_B = dst_B[bid.x][bid.y][k_iter % PatternLen];
-        int dst_A_stage = dst_id_A.iter % K_PIPE_MAX;
-        int dst_B_stage = dst_id_B.iter % K_PIPE_MAX;
+        int dst_A_stage = (dst_id_A.iter - (k_iter % PatternLen) + smem_pipe_dsmem_send.index()) % K_PIPE_MAX;
+        int dst_B_stage = (dst_id_B.iter - (k_iter % PatternLen) + smem_pipe_dsmem_send.index()) % K_PIPE_MAX;
 
         // wait receiver's arrive
         if (dst_id_A.x != -1 && dst_id_A.y != -1) {
@@ -498,7 +499,7 @@ collective_mma_code_1 = """
           pipeline.dsmem_copy_prepare(TransactionBytesA, block_id, eA, dst_id_A.iter % PatternLen);
           BarrierType* tma_A_barrier = pipeline.producer_get_barrier_by_stage(dst_id_A.iter % PatternLen, eA);
           dsmem_copy_func(block_id,
-                          tAsA(_,_,_,k_iter % K_PIPE_MAX).data().get(), 
+                          tAsA(_,_,_,smem_pipe_dsmem_send.index()).data().get(), 
                           tAsA(_,_,_,dst_A_stage).data().get(), 
                           tma_A_barrier, 
                           TransactionBytesA
@@ -512,7 +513,7 @@ collective_mma_code_1 = """
           pipeline.dsmem_copy_prepare(TransactionBytesB, block_id, eB, dst_id_B.iter % PatternLen);
           BarrierType* tma_B_barrier = pipeline.producer_get_barrier_by_stage(dst_id_B.iter % PatternLen, eB);
           dsmem_copy_func(block_id,
-                          tBsB(_,_,_,k_iter % K_PIPE_MAX).data().get(), 
+                          tBsB(_,_,_,smem_pipe_dsmem_send.index()).data().get(), 
                           tBsB(_,_,_,dst_B_stage).data().get(), 
                           tma_B_barrier, 
                           TransactionBytesB
@@ -523,6 +524,7 @@ collective_mma_code_1 = """
         ++k_iter;
         ++receiver_ready_state_A;
         ++receiver_ready_state_B;
+        ++smem_pipe_dsmem_send;
         if (k_iter % PatternLen == 0) {
           sender_ready_phase ^= 1;
         }
@@ -644,7 +646,6 @@ collective_mma_code_1 = """
     tiled_mma.accumulate_ = GMMA::ScaleOut::Zero;
 
     dim3 bid = cute::block_id_in_cluster();
-    int k_iter = 0;
 
     warpgroup_fence_operand(accum);
     CUTLASS_PRAGMA_UNROLL
@@ -653,7 +654,7 @@ collective_mma_code_1 = """
       // WAIT on smem_pipe_read_physical until its data are available (phase bit flips from rdPhaseBit value)
       pipeline.consumer_wait(smem_pipe_read_logical);
 
-      int read_stage = k_iter % K_PIPE_MAX;
+      int read_stage = smem_pipe_read_physical.index();
       warpgroup_arrive();
       // Unroll the K mode manually to set scale D to 1
       CUTLASS_PRAGMA_UNROLL
@@ -667,7 +668,6 @@ collective_mma_code_1 = """
 
       ++smem_pipe_read_physical;
       ++smem_pipe_read_logical;
-      ++k_iter;
     }
 
     warpgroup_fence_operand(accum);
@@ -685,7 +685,7 @@ collective_mma_code_1 = """
       // Compute on k_tile
       //
 
-      int read_stage = k_iter % K_PIPE_MAX;
+      int read_stage = smem_pipe_read_physical.index();
       warpgroup_fence_operand(accum);
       warpgroup_arrive();
       // Unroll the K mode manually to set scale D to 1
@@ -722,7 +722,6 @@ collective_mma_code_1 = """
       ++smem_pipe_read_logical;
       ++smem_pipe_release;
       ++k_release_iter;
-      ++k_iter;
     }
 
     warpgroup_fence_operand(accum);
