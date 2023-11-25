@@ -43,7 +43,7 @@ header_0 = """
 #include "helper.h"
 
 #define TEST_CORRECTNESS 1
-#define TEST_ROUND 1
+#define TEST_ROUND 10
 
 using namespace cute;
 
@@ -379,6 +379,8 @@ collective_mma_code_1 = """
 
       int k_iter = 0;
 
+      // Previous tile loop: last iteration logical pipeline left ((PatternLen - (k_tile_count % PatternLen)) % PatternLen) steps
+      int prev_left_steps = (PatternLen - (k_tile_count % PatternLen)) % PatternLen;
 
 
       // Mainloop
@@ -428,10 +430,43 @@ collective_mma_code_1 = """
           copy(tma_load_b.with(*tma_B_barrier, mcast_mask_b), tBgB(_,_,_,k_tile_iter_AB), tBsB(_,_,_,write_stage));
         }
 
-        ++k_tile_iter;
         ++k_iter;
 
         // Advance smem_pipe_write_physical
+        ++smem_pipe_write_physical;
+        ++smem_pipe_write_logical;
+
+        if (((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen == 0) {
+          sender_dsmem_copy_finish_phase ^= 1;
+        }
+      }
+
+      CUTLASS_PRAGMA_NO_UNROLL
+      for (int i = 0; i < prev_left_steps; i++)
+      {
+        block_iter_id src_id_A = src_A[bid.x][bid.y][k_iter % PatternLen];
+        block_iter_id src_id_B = src_B[bid.x][bid.y][k_iter % PatternLen];
+        pipeline.copy_prepare(smem_pipe_write_logical, eA, 0, true);
+        pipeline.copy_prepare(smem_pipe_write_logical, eB, 0, true);
+
+        using BarrierType = typename MainloopPipeline::ProducerBarrierType;
+        BarrierType* tma_A_barrier = pipeline.producer_get_barrier(smem_pipe_write_logical, eA);
+        BarrierType* tma_B_barrier = pipeline.producer_get_barrier(smem_pipe_write_logical, eB);
+
+        if (src_id_A.x == -1 || src_id_A.y == -1) {
+          if (( dst_A[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].x != -1 && 
+                dst_A[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].y != -1)) {
+            pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eA, k_iter % PatternLen);
+          }
+        }
+        if (src_id_B.x == -1 || src_id_B.y == -1) {
+          if (( dst_B[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].x != -1 && 
+                dst_B[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].y != -1)) {
+            pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eB, k_iter % PatternLen);
+          }
+        }
+
+        ++k_iter;
         ++smem_pipe_write_physical;
         ++smem_pipe_write_logical;
 
@@ -460,6 +495,7 @@ collective_mma_code_1 = """
       // assert(k_tile_count % size<0>(ClusterShape{}) == 0 && k_tile_count % size<1>(ClusterShape{}) == 0; "cluster shape not aligned!");
       
       int k_iter = 0;
+      int prev_left_steps = (PatternLen - (k_tile_count % PatternLen)) % PatternLen;
 
       int sep_stage_A = 0;
       int sep_stage_B = 0;
@@ -495,6 +531,10 @@ collective_mma_code_1 = """
           // wait sender buffer ready, may have bug (double consumer wait?)
           pipeline.sender_wait_sender_ready(sender_ready_phase, eA, k_iter % PatternLen);
           pipeline.sender_wait_receiver_ready(receiver_ready_state_A, eA);
+          if (dst_A[dst_id_A.x][dst_id_A.y][((dst_id_A.iter - K_PIPE_MAX) + PatternLen) % PatternLen].x != -1 && 
+              dst_A[dst_id_A.x][dst_id_A.y][((dst_id_A.iter - K_PIPE_MAX) + PatternLen) % PatternLen].y != -1) {
+            pipeline.sync_wait(sender_ready_phase, eA, k_iter % PatternLen);
+          }
           uint32_t block_id = dst_id_A.x + dst_id_A.y * size<0>(ClusterShape{});
           pipeline.dsmem_copy_prepare(TransactionBytesA, block_id, eA, dst_id_A.iter % PatternLen);
           BarrierType* tma_A_barrier = pipeline.producer_get_barrier_by_stage(dst_id_A.iter % PatternLen, eA);
@@ -509,6 +549,10 @@ collective_mma_code_1 = """
           // wait sender buffer ready, may have bug (double consumer wait?)
           pipeline.sender_wait_sender_ready(sender_ready_phase, eB, k_iter % PatternLen);
           pipeline.sender_wait_receiver_ready(receiver_ready_state_B, eB);
+          if (dst_B[dst_id_B.x][dst_id_B.y][((dst_id_B.iter - K_PIPE_MAX) + PatternLen) % PatternLen].x != -1 && 
+              dst_B[dst_id_B.x][dst_id_B.y][((dst_id_B.iter - K_PIPE_MAX) + PatternLen) % PatternLen].y != -1) {
+            pipeline.sync_wait(sender_ready_phase, eB, k_iter % PatternLen);
+          }
           uint32_t block_id = dst_id_B.x + dst_id_B.y * size<0>(ClusterShape{});
           pipeline.dsmem_copy_prepare(TransactionBytesB, block_id, eB, dst_id_B.iter % PatternLen);
           BarrierType* tma_B_barrier = pipeline.producer_get_barrier_by_stage(dst_id_B.iter % PatternLen, eB);
@@ -520,11 +564,44 @@ collective_mma_code_1 = """
                           );
         }
 
-        ++k_tile_iter;
         ++k_iter;
         ++receiver_ready_state_A;
         ++receiver_ready_state_B;
         ++smem_pipe_dsmem_send;
+        if (k_iter % PatternLen == 0) {
+          sender_ready_phase ^= 1;
+        }
+      }
+
+      CUTLASS_PRAGMA_NO_UNROLL
+      for (int i = 0; i < prev_left_steps; i++)
+      {
+        block_iter_id dst_id_A = dst_A[bid.x][bid.y][k_iter % PatternLen];
+        block_iter_id dst_id_B = dst_B[bid.x][bid.y][k_iter % PatternLen];
+
+        // wait receiver's arrive
+        if (dst_id_A.x != -1 && dst_id_A.y != -1) {
+          // wait sender buffer ready, may have bug (double consumer wait?)
+          pipeline.sender_wait_sender_ready(sender_ready_phase, eA, k_iter % PatternLen);
+          pipeline.sender_wait_receiver_ready(receiver_ready_state_A, eA);
+          if (dst_A[dst_id_A.x][dst_id_A.y][((dst_id_A.iter - K_PIPE_MAX) + PatternLen) % PatternLen].x != -1 && 
+              dst_A[dst_id_A.x][dst_id_A.y][((dst_id_A.iter - K_PIPE_MAX) + PatternLen) % PatternLen].y != -1) {
+            pipeline.sync_wait(sender_ready_phase, eA, k_iter % PatternLen);
+          }
+        }
+        if (dst_id_B.x != -1 && dst_id_B.y != -1) {
+          // wait sender buffer ready, may have bug (double consumer wait?)
+          pipeline.sender_wait_sender_ready(sender_ready_phase, eB, k_iter % PatternLen);
+          pipeline.sender_wait_receiver_ready(receiver_ready_state_B, eB);
+          if (dst_B[dst_id_B.x][dst_id_B.y][((dst_id_B.iter - K_PIPE_MAX) + PatternLen) % PatternLen].x != -1 && 
+              dst_B[dst_id_B.x][dst_id_B.y][((dst_id_B.iter - K_PIPE_MAX) + PatternLen) % PatternLen].y != -1) {
+            pipeline.sync_wait(sender_ready_phase, eB, k_iter % PatternLen);
+          }
+        }
+
+        ++k_iter;
+        ++receiver_ready_state_A;
+        ++receiver_ready_state_B;
         if (k_iter % PatternLen == 0) {
           sender_ready_phase ^= 1;
         }
@@ -535,6 +612,8 @@ collective_mma_code_1 = """
     if (warp_idx_in_warp_group == 2 and lane_predicate) {
       dim3 bid = cute::block_id_in_cluster();
       int k_iter = 0;
+      int prev_left_steps = (PatternLen - (k_tile_count % PatternLen)) % PatternLen;
+      k_tile_count +=  prev_left_steps;
       CUTLASS_PRAGMA_NO_UNROLL
       for ( ; k_tile_count > 0; --k_tile_count) {
         block_iter_id src_id_A = src_A[bid.x][bid.y][k_iter % PatternLen];
@@ -553,6 +632,38 @@ collective_mma_code_1 = """
         ++k_iter;
         if (k_iter % PatternLen == 0) {
           receiver_dsmem_copy_finish_phase ^= 1;
+        }
+      }
+    }
+
+    if (warp_idx_in_warp_group == 3 and lane_predicate) {
+      dim3 bid = cute::block_id_in_cluster();
+      int k_iter = 0;
+      int prev_left_steps = (PatternLen - (k_tile_count % PatternLen)) % PatternLen;
+      k_tile_count +=  prev_left_steps;
+      CUTLASS_PRAGMA_NO_UNROLL
+      for ( ; k_tile_count > 0; --k_tile_count) {
+        if (( dst_A[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].x != -1 && 
+              dst_A[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].y != -1)) {
+          pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eA, k_iter % PatternLen);
+          block_iter_id src_id_A = src_A[bid.x][bid.y][k_iter % PatternLen];
+          if (src_id_A.x != -1 && src_id_A.y != -1) {
+            uint32_t block_id = src_id_A.x + src_id_A.y * size<0>(ClusterShape{});
+            pipeline.sync_arrive(block_id, eA, src_id_A.iter);
+          }
+        }
+        if (( dst_B[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].x != -1 && 
+              dst_B[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].y != -1)) {
+          pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eB, k_iter % PatternLen);
+          block_iter_id src_id_B = src_B[bid.x][bid.y][k_iter % PatternLen];
+          if (src_id_B.x != -1 && src_id_B.y != -1) {
+            uint32_t block_id = src_id_B.x + src_id_B.y * size<0>(ClusterShape{});
+            pipeline.sync_arrive(block_id, eB, src_id_B.iter);
+          }
+        }
+        ++k_iter;
+        if (((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen == 0) {
+          sender_dsmem_copy_finish_phase ^= 1;
         }
       }
     }
@@ -732,9 +843,12 @@ collective_mma_code_1 = """
   CUTLASS_DEVICE void
   mma_tail( MainloopPipeline pipeline, 
             PhysicalPipelineState smem_pipe_release, 
+            LogicalPipelineState smem_pipe_read_logical,
             int k_tile_count) {
     // Prologue GMMAs
     int prologue_mma_count = min(K_PIPE_MMAS, k_tile_count);
+    int prev_left_steps = (PatternLen - (k_tile_count % PatternLen)) % PatternLen;
+    smem_pipe_read_logical.advance(k_tile_count);
     k_tile_count -= prologue_mma_count;
     int k_iter = k_tile_count;
     dim3 bid = cute::block_id_in_cluster();
@@ -762,6 +876,25 @@ collective_mma_code_1 = """
       pipeline.consumer_release(smem_pipe_release, eA);
       pipeline.consumer_release(smem_pipe_release, eB);
       ++smem_pipe_release;
+      ++k_iter;
+    }
+
+    for (int i = 0; i < prev_left_steps; ++i) {
+      pipeline.consumer_wait(smem_pipe_read_logical);
+      block_iter_id src_id_A = src_A[bid.x][bid.y][(k_iter + K_PIPE_MAX) % PatternLen];
+      block_iter_id src_id_B = src_B[bid.x][bid.y][(k_iter + K_PIPE_MAX) % PatternLen];
+      if (threadIdx.x == 128 || threadIdx.x == 256) {
+        if (src_id_A.x != -1 && src_id_A.y != -1) {
+          uint32_t block_id = src_id_A.x + src_id_A.y * size<0>(ClusterShape{});
+          pipeline.receiver_arrive_sender(block_id, eA, src_id_A.iter);
+        }
+        if (src_id_B.x != -1 && src_id_B.y != -1) {
+          uint32_t block_id = src_id_B.x + src_id_B.y * size<0>(ClusterShape{});
+          pipeline.receiver_arrive_sender(block_id, eB, src_id_B.iter);
+        }
+      }
+      ++k_iter;
+      ++smem_pipe_read_logical;
     }
   }
 
@@ -1069,7 +1202,6 @@ int run(Options &options, int& passed, int& failed)
   else {
     passed++;
   }
-  std::cout << "Passed:" << passed << ", failed:" << failed << std::endl;
 
   // Run profiling loop
 #if !TEST_CORRECTNESS
@@ -1147,6 +1279,7 @@ int main(int argc, char const **args) {
     for (int i=0; i<TEST_ROUND; i++) {
       run<Gemm>(options, passed, failed);
     }
+    std::cout << "Passed:" << passed << ", failed:" << failed << std::endl;
   #endif
 #else
   #if defined(CUTLASS_ARCH_MMA_SM90_SUPPORTED)

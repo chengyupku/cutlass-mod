@@ -247,12 +247,12 @@ public:
     namespace cg = cooperative_groups;
     cg::cluster_group cluster = cg::this_cluster();
     dim3 cluster_size = cluster.dim_blocks();
-    if (blockIdx.x==0 && blockIdx.y==0 && blockIdx.z==0 && threadIdx.x==0) {
-      printf("Launch config:\n");
-      printf("  Grid    :(%d, %d, %d)\n", gridDim.x, gridDim.y, gridDim.z);
-      printf("  Cluster :(%d, %d, %d)\n", cluster_size.x, cluster_size.y, cluster_size.z);
-      printf("  Block   :(%d, %d, %d)\n", blockDim.x, blockDim.y, blockDim.z);
-    }
+    // if (blockIdx.x==0 && blockIdx.y==0 && blockIdx.z==0 && threadIdx.x==0) {
+    //   printf("Launch config:\n");
+    //   printf("  Grid    :(%d, %d, %d)\n", gridDim.x, gridDim.y, gridDim.z);
+    //   printf("  Cluster :(%d, %d, %d)\n", cluster_size.x, cluster_size.y, cluster_size.z);
+    //   printf("  Block   :(%d, %d, %d)\n", blockDim.x, blockDim.y, blockDim.z);
+    // }
     using X = Underscore;
 
     // Any Tensor Op MMA Atom in the WGMMA ISA is arch conditional to sm90a.
@@ -419,6 +419,9 @@ public:
       cutlass::arch::warpgroup_reg_dealloc<LoadRegisterRequirement>();
 
       while (work_tile_info.is_valid_tile) {
+        int aligned_k_tile_count = (CollectiveMainloop::PatternLen - k_tile_count % CollectiveMainloop::PatternLen) 
+                                  % CollectiveMainloop::PatternLen
+                                  + k_tile_count;
         // Compute m_coord, n_coord, l_coord with the post-tiled m-shape and n-shape
         auto m_coord = idx2crd(work_tile_info.M_idx, shape<2>(gA_mkl));
         auto n_coord = idx2crd(work_tile_info.N_idx, shape<2>(gB_nkl));
@@ -455,10 +458,11 @@ public:
         );
         // Update starting pipeline state for the next tile
         mainloop_pipe_producer_physical_state.advance(k_tile_count);
-        mainloop_pipe_producer_logical_state.advance(k_tile_count);
         mainloop_pipe_producer_dsmem_send_state.advance(k_tile_count);
-        receiver_ready_state_A.advance(k_tile_count);
-        receiver_ready_state_B.advance(k_tile_count);
+
+        mainloop_pipe_producer_logical_state.advance(aligned_k_tile_count);
+        receiver_ready_state_A.advance(aligned_k_tile_count);
+        receiver_ready_state_B.advance(aligned_k_tile_count);
 
         if (collective_epilogue.is_source_needed()) {
           collective_epilogue.load(
@@ -519,6 +523,9 @@ public:
       cutlass::arch::warpgroup_reg_alloc<MmaRegisterRequirement>();
 
       while (work_tile_info.is_valid_tile) {
+        int aligned_k_tile_count = (CollectiveMainloop::PatternLen - k_tile_count % CollectiveMainloop::PatternLen) 
+                                  % CollectiveMainloop::PatternLen
+                                  + k_tile_count;
         // Compute m_coord, n_coord, l_coord with the post-tiled m-shape and n-shape
         auto m_coord = idx2crd(work_tile_info.M_idx, shape<2>(gA_mkl));
         auto n_coord = idx2crd(work_tile_info.N_idx, shape<2>(gB_nkl));
@@ -548,11 +555,12 @@ public:
         collective_mainloop.mma_tail(
           mainloop_pipeline,
           mainloop_pipe_consumer_physical_state,
+          mainloop_pipe_consumer_logical_state,
           k_tile_count
         );
         // Update starting mainloop pipeline state for the next tile
         mainloop_pipe_consumer_physical_state.advance(k_tile_count);
-        mainloop_pipe_consumer_logical_state.advance(k_tile_count);
+        mainloop_pipe_consumer_logical_state.advance(aligned_k_tile_count);
 
         // Epilogue and write to gD
         collective_epilogue.store(

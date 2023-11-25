@@ -16,11 +16,11 @@ for index in $(seq 0 81); do
 
     pid=$!
 
-    sleep 10
+    sleep 30
 
     if ps -p $pid > /dev/null; then
         kill $pid
-        echo "$(date): Process $pid ($executable) exceeded 10 seconds and was terminated." >> "$log_file"
+        echo "$(date): Process $pid ($executable) exceeded 30 seconds and was terminated." >> "$log_file"
     else
         end_time=$(date +%s)
         execution_time=$((end_time - start_time))

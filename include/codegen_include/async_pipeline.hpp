@@ -133,6 +133,7 @@ public :
     EmptyBarrier empty_barrier_[2][Stages];
     SignalBarrier can_send_barrier_[2][PatternLen];
     SignalBarrier copy_finish_barrier_[2][PatternLen];
+    SignalBarrier syncs_barrier_[2][PatternLen];
     SignalBarrier mma_finish_barrier_[1];
   };
 
@@ -160,6 +161,7 @@ public :
       , empty_barrier_ptr_(storage.empty_barrier_) 
       , can_send_barrier_ptr_(storage.can_send_barrier_)
       , copy_finish_barrier_ptr_(storage.copy_finish_barrier_)
+      , syncs_barrier_ptr_(storage.syncs_barrier_)
       , mma_finish_barrier_ptr(storage.mma_finish_barrier_)
     {
 
@@ -189,6 +191,10 @@ public :
       for (int i = 0; i < PatternLen; ++i) {
         can_send_barrier_ptr_[eA][i].init(2);
         can_send_barrier_ptr_[eB][i].init(2);
+      }
+      for (int i = 0; i < PatternLen; ++i) {
+        syncs_barrier_ptr_[eA][i].init(1);
+        syncs_barrier_ptr_[eB][i].init(1);
       }
       mma_finish_barrier_ptr[0].init(num_consumer_warpgroups_per_cluster * cute::size<0>(cluster_shape) * cute::size<1>(cluster_shape));
     }
@@ -269,7 +275,8 @@ public :
   }
 
   CUTLASS_DEVICE
-  void copy_prepare(PipelineState<PatternLen> state, uint32_t var, uint32_t transaction_bytes = 0) {
+  void copy_prepare(PipelineState<PatternLen> state, uint32_t var, 
+                    uint32_t transaction_bytes = 0, bool no_trans = false) {
     if (params_.is_leader) {
       if (transaction_bytes == 0) {
         if (var == eA) {
@@ -278,6 +285,9 @@ public :
         else if (var == eB) {
           transaction_bytes = params_.B_transaction_bytes;
         }
+      }
+      if (no_trans) {
+        transaction_bytes = 0;
       }
       full_barrier_ptr_[var][state.index()].arrive_and_reset_bytes(transaction_bytes);
     }
@@ -329,6 +339,20 @@ public :
   CUTLASS_DEVICE
   void receiver_arrive_dsmem_copy_finish(uint32_t dst_block_id, uint32_t var, uint32_t stage) {
     copy_finish_barrier_ptr_[var][stage].arrive(dst_block_id);
+  }
+
+  CUTLASS_DEVICE
+  void sync_wait(uint32_t phase, uint32_t var, uint32_t stage) {
+    uint32_t done;
+    done = syncs_barrier_ptr_[var][stage].test_wait(phase);
+    if (not done) {
+      syncs_barrier_ptr_[var][stage].wait(phase);
+    }
+  }
+
+  CUTLASS_DEVICE
+  void sync_arrive(uint32_t dst_block_id, uint32_t var, uint32_t stage) {
+    syncs_barrier_ptr_[var][stage].arrive(dst_block_id);
   }
 
   CUTLASS_DEVICE
@@ -396,6 +420,7 @@ private :
   EmptyBarrier (*empty_barrier_ptr_)[Stages] = nullptr;
   SignalBarrier (*can_send_barrier_ptr_)[PatternLen] = nullptr;
   SignalBarrier (*copy_finish_barrier_ptr_)[PatternLen] = nullptr;
+  SignalBarrier (*syncs_barrier_ptr_)[PatternLen] = nullptr;
   SignalBarrier (*mma_finish_barrier_ptr) = nullptr;
   Params params_;
 

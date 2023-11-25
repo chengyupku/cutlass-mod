@@ -1,2275 +1,574 @@
 ---------------------------------
 0_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.0715 ms
-  GFLOPS: 583623
 ---------------------------------
 1_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.3348 ms
-  GFLOPS: 573603
 ---------------------------------
 2_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.3059 ms
-  GFLOPS: 574686
 ---------------------------------
 3_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.149 ms
-  GFLOPS: 580639
 ---------------------------------
 4_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.0559 ms
-  GFLOPS: 584229
 ---------------------------------
 5_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 14.8547 ms
-  GFLOPS: 592144
 ---------------------------------
 6_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 14.6509 ms
-  GFLOPS: 600380
 ---------------------------------
 7_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.5003 ms
-  GFLOPS: 567479
 ---------------------------------
 8_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 14.979 ms
-  GFLOPS: 587229
 ---------------------------------
 9_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.2651 ms
-  GFLOPS: 576222
 ---------------------------------
 10_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.2693 ms
-  GFLOPS: 576063
 ---------------------------------
 11_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 14.9946 ms
-  GFLOPS: 586618
 ---------------------------------
 12_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.0266 ms
-  GFLOPS: 585370
 ---------------------------------
 13_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.188 ms
-  GFLOPS: 543372
 ---------------------------------
 14_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.5907 ms
-  GFLOPS: 564189
 ---------------------------------
 15_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.5212 ms
-  GFLOPS: 566717
 ---------------------------------
 16_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.514 ms
-  GFLOPS: 566978
 ---------------------------------
 17_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.0134 ms
-  GFLOPS: 549297
 ---------------------------------
 18_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.0556 ms
-  GFLOPS: 547853
 ---------------------------------
 19_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.0787 ms
-  GFLOPS: 547065
 ---------------------------------
 20_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.2343 ms
-  GFLOPS: 541822
+Passed:0, failed:1
 ---------------------------------
 21_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.4263 ms
-  GFLOPS: 535488
 ---------------------------------
 22_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.2851 ms
-  GFLOPS: 540132
 ---------------------------------
 23_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.6639 ms
-  GFLOPS: 561553
 ---------------------------------
 24_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.034 ms
-  GFLOPS: 548591
 ---------------------------------
 25_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.4554 ms
-  GFLOPS: 534543
 ---------------------------------
 26_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.4894 ms
-  GFLOPS: 533440
 ---------------------------------
 27_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.0126 ms
-  GFLOPS: 549323
 ---------------------------------
 28_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.1769 ms
-  GFLOPS: 543743
 ---------------------------------
 29_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.2889 ms
-  GFLOPS: 540007
 ---------------------------------
 30_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.6593 ms
-  GFLOPS: 561717
 ---------------------------------
 31_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.0577 ms
-  GFLOPS: 547781
 ---------------------------------
 32_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.4747 ms
-  GFLOPS: 533915
 ---------------------------------
 33_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.5523 ms
-  GFLOPS: 531411
 ---------------------------------
 34_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.0291 ms
-  GFLOPS: 548757
 ---------------------------------
 35_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.1728 ms
-  GFLOPS: 543883
 ---------------------------------
 36_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.2398 ms
-  GFLOPS: 541638
 ---------------------------------
 37_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.2647 ms
-  GFLOPS: 540808
 ---------------------------------
 38_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.0917 ms
-  GFLOPS: 546622
 ---------------------------------
 39_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.6516 ms
-  GFLOPS: 561994
 ---------------------------------
 40_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.8841 ms
-  GFLOPS: 553768
 ---------------------------------
 41_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.4021 ms
-  GFLOPS: 536277
 ---------------------------------
 42_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.2279 ms
-  GFLOPS: 542036
 ---------------------------------
 43_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.1994 ms
-  GFLOPS: 542989
 ---------------------------------
 44_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.851 ms
-  GFLOPS: 554924
 ---------------------------------
 45_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.1779 ms
-  GFLOPS: 543712
 ---------------------------------
 46_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.1094 ms
-  GFLOPS: 546022
 ---------------------------------
 47_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.6268 ms
-  GFLOPS: 562887
 ---------------------------------
 48_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.4982 ms
-  GFLOPS: 567557
 ---------------------------------
 49_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.1685 ms
-  GFLOPS: 544025
 ---------------------------------
 50_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.4476 ms
-  GFLOPS: 569414
 ---------------------------------
 51_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.5189 ms
-  GFLOPS: 566798
 ---------------------------------
 52_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.0821 ms
-  GFLOPS: 546949
+Passed:0, failed:1
 ---------------------------------
 53_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.0994 ms
-  GFLOPS: 546363
 ---------------------------------
 54_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 19.2602 ms
-  GFLOPS: 456697
 ---------------------------------
 55_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
+Passed:1, failed:0
 ---------------------------------
 56_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.0033 ms
-  GFLOPS: 488583
 ---------------------------------
 57_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.1662 ms
-  GFLOPS: 484202
+Passed:0, failed:1
 ---------------------------------
 58_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
+Passed:1, failed:0
 ---------------------------------
 59_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
+Passed:1, failed:0
 ---------------------------------
 60_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.2597 ms
-  GFLOPS: 481720
+Passed:0, failed:1
 ---------------------------------
 61_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.0101 ms
-  GFLOPS: 488397
+Passed:0, failed:1
 ---------------------------------
 62_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
+Passed:1, failed:0
 ---------------------------------
 63_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
+Passed:1, failed:0
 ---------------------------------
 64_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
+Passed:1, failed:0
 ---------------------------------
 65_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
+Passed:0, failed:1
 ---------------------------------
 66_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.2972 ms
-  GFLOPS: 480734
 ---------------------------------
 67_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 19.0513 ms
-  GFLOPS: 461706
 ---------------------------------
 68_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 17.184 ms
-  GFLOPS: 511876
+Passed:0, failed:1
 ---------------------------------
 69_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 17.697 ms
-  GFLOPS: 497040
+Passed:0, failed:1
 ---------------------------------
 70_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
+Passed:1, failed:0
 ---------------------------------
 71_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
+Passed:1, failed:0
 ---------------------------------
 72_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
+Passed:1, failed:0
 ---------------------------------
 73_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
+Passed:0, failed:1
 ---------------------------------
 74_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.7422 ms
-  GFLOPS: 469320
 ---------------------------------
 75_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.9095 ms
-  GFLOPS: 465169
 ---------------------------------
 76_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 17.826 ms
-  GFLOPS: 493441
+Passed:0, failed:1
 ---------------------------------
 77_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.7464 ms
-  GFLOPS: 469214
 ---------------------------------
 78_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 19.0568 ms
-  GFLOPS: 461573
 ---------------------------------
 79_gemm_codegen
+Launch config:
+  Grid    :(28, 4, 1)
+  Cluster :(2, 4, 1)
+  Block   :(384, 1, 1)
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 17.8989 ms
-  GFLOPS: 491431
 ---------------------------------
 80_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.2174 ms
-  GFLOPS: 482839
+Passed:0, failed:1
 ---------------------------------
 81_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 19.2267 ms
-  GFLOPS: 457493
----------------------------------
-0_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.0214 ms
-  GFLOPS: 585572
----------------------------------
-0_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.0195 ms
-  GFLOPS: 585645
----------------------------------
-1_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.2904 ms
-  GFLOPS: 575270
----------------------------------
-2_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.3124 ms
-  GFLOPS: 574444
----------------------------------
-0_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.0182 ms
-  GFLOPS: 585695
----------------------------------
-1_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.2905 ms
-  GFLOPS: 575264
----------------------------------
-2_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.3063 ms
-  GFLOPS: 574672
----------------------------------
-3_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.3409 ms
-  GFLOPS: 573375
----------------------------------
-4_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.0532 ms
-  GFLOPS: 584334
----------------------------------
-5_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 14.8344 ms
-  GFLOPS: 592954
----------------------------------
-6_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 14.6533 ms
-  GFLOPS: 600280
----------------------------------
-7_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.4925 ms
-  GFLOPS: 567764
----------------------------------
-8_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 14.9863 ms
-  GFLOPS: 586943
----------------------------------
-9_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.2612 ms
-  GFLOPS: 576369
----------------------------------
-10_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.2823 ms
-  GFLOPS: 575575
----------------------------------
-11_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 14.9808 ms
-  GFLOPS: 587159
----------------------------------
-12_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.023 ms
-  GFLOPS: 585508
----------------------------------
-13_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.1369 ms
-  GFLOPS: 545093
----------------------------------
-14_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.5606 ms
-  GFLOPS: 565281
----------------------------------
-15_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.4866 ms
-  GFLOPS: 567980
----------------------------------
-16_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.5273 ms
-  GFLOPS: 566492
----------------------------------
-17_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.9514 ms
-  GFLOPS: 551430
----------------------------------
-18_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.0693 ms
-  GFLOPS: 547386
----------------------------------
-19_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.081 ms
-  GFLOPS: 546987
----------------------------------
-20_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.2476 ms
-  GFLOPS: 541380
----------------------------------
-21_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.4748 ms
-  GFLOPS: 533914
----------------------------------
-22_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.3025 ms
-  GFLOPS: 539556
----------------------------------
-23_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.6291 ms
-  GFLOPS: 562803
----------------------------------
-24_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.0485 ms
-  GFLOPS: 548093
----------------------------------
-25_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.463 ms
-  GFLOPS: 534293
----------------------------------
-26_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.4691 ms
-  GFLOPS: 534097
----------------------------------
-27_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.0394 ms
-  GFLOPS: 548407
----------------------------------
-28_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.2263 ms
-  GFLOPS: 542089
----------------------------------
-29_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.2896 ms
-  GFLOPS: 539982
----------------------------------
-30_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.6735 ms
-  GFLOPS: 561208
----------------------------------
-31_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.0309 ms
-  GFLOPS: 548695
----------------------------------
-32_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.4908 ms
-  GFLOPS: 533392
----------------------------------
-33_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.5511 ms
-  GFLOPS: 531452
----------------------------------
-34_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.0247 ms
-  GFLOPS: 548907
----------------------------------
-35_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.168 ms
-  GFLOPS: 544044
----------------------------------
-36_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.2544 ms
-  GFLOPS: 541151
----------------------------------
-37_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.3319 ms
-  GFLOPS: 538583
----------------------------------
-38_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.0632 ms
-  GFLOPS: 547593
----------------------------------
-39_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.6456 ms
-  GFLOPS: 562208
----------------------------------
-40_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.8591 ms
-  GFLOPS: 554640
----------------------------------
-41_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.4107 ms
-  GFLOPS: 535997
----------------------------------
-42_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.2215 ms
-  GFLOPS: 542248
----------------------------------
-43_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.2215 ms
-  GFLOPS: 542249
----------------------------------
-44_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.8386 ms
-  GFLOPS: 555357
----------------------------------
-45_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.1726 ms
-  GFLOPS: 543887
----------------------------------
-46_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.1097 ms
-  GFLOPS: 546012
----------------------------------
-47_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.0645 ms
-  GFLOPS: 547549
----------------------------------
-48_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.5009 ms
-  GFLOPS: 567456
----------------------------------
-49_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.1294 ms
-  GFLOPS: 545345
----------------------------------
-50_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.416 ms
-  GFLOPS: 570582
----------------------------------
-51_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 15.5221 ms
-  GFLOPS: 566681
----------------------------------
-52_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.0766 ms
-  GFLOPS: 547137
----------------------------------
-53_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 16.1013 ms
-  GFLOPS: 546296
----------------------------------
-54_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 19.269 ms
-  GFLOPS: 456489
----------------------------------
-55_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 19.2172 ms
-  GFLOPS: 457720
----------------------------------
-56_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 17.9654 ms
-  GFLOPS: 489612
----------------------------------
-57_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.1201 ms
-  GFLOPS: 485433
----------------------------------
-58_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.5068 ms
-  GFLOPS: 475291
----------------------------------
-59_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 19.0404 ms
-  GFLOPS: 461970
----------------------------------
-60_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.2542 ms
-  GFLOPS: 481867
----------------------------------
-61_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.0276 ms
-  GFLOPS: 487922
----------------------------------
-62_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 19.249 ms
-  GFLOPS: 456964
----------------------------------
-63_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 19.4829 ms
-  GFLOPS: 451477
----------------------------------
-64_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.3002 ms
-  GFLOPS: 480657
----------------------------------
-65_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.8014 ms
-  GFLOPS: 467843
----------------------------------
-66_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.2886 ms
-  GFLOPS: 480960
----------------------------------
-67_gemm_codegen
-Passed:1, failed:0
 Launch config:
   Grid    :(28, 4, 1)
   Cluster :(2, 4, 1)
   Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 19.1939 ms
-  GFLOPS: 458277
----------------------------------
-68_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 17.1936 ms
-  GFLOPS: 511592
----------------------------------
-69_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 17.7166 ms
-  GFLOPS: 496489
----------------------------------
-70_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 19.4057 ms
-  GFLOPS: 453273
----------------------------------
-71_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 19.2156 ms
-  GFLOPS: 457759
----------------------------------
-72_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 17.9444 ms
-  GFLOPS: 490186
----------------------------------
-73_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.2147 ms
-  GFLOPS: 482913
----------------------------------
-74_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.7506 ms
-  GFLOPS: 469109
----------------------------------
-75_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.9427 ms
-  GFLOPS: 464353
----------------------------------
-76_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 17.7766 ms
-  GFLOPS: 494814
----------------------------------
-77_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.7747 ms
-  GFLOPS: 468509
----------------------------------
-78_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 19.0252 ms
-  GFLOPS: 462340
----------------------------------
-79_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 17.9234 ms
-  GFLOPS: 490761
----------------------------------
-80_gemm_codegen
 Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 18.1771 ms
-  GFLOPS: 483911
----------------------------------
-81_gemm_codegen
-Passed:1, failed:0
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-Launch config:
-  Grid    :(28, 4, 1)
-  Cluster :(2, 4, 1)
-  Block   :(384, 1, 1)
-  Problem Size: 16384x16384x16384
-  Avg runtime: 19.1636 ms
-  GFLOPS: 459001
