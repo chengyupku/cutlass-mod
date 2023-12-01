@@ -1,3 +1,5 @@
+#define SIMULATE_MULTIPLE 2
+#define Dsmem_ACC 2
 
 #include <iostream>
 
@@ -38,11 +40,11 @@
 #include "cutlass/pipeline/pipeline.hpp"
 
 #include "codegen_include/async_pipeline.hpp"
-#include "codegen_include/gemm_kernel.hpp"
+#include "codegen_include/gemm_kernel_simulate_gmem.hpp"
 
 #include "helper.h"
 
-#define TEST_CORRECTNESS 1
+#define TEST_CORRECTNESS 0
 #define TEST_ROUND 10
 
 using namespace cute;
@@ -128,6 +130,76 @@ using SmemCopyAtomB = void;
 struct block_iter_id {
   int8_t x, y, iter;
 };
+__device__ constexpr int8_t tile_order[2][4][PatternLen] = {
+		{
+	    {2, 3, 4, 0, 5, 1, 6, 7},
+	    {2, 3, 4, 1, 5, 0, 6, 7},
+	    {2, 3, 4, 0, 5, 1, 6, 7},
+	    {2, 3, 4, 1, 5, 0, 6, 7},
+		},
+		{
+	    {2, 3, 4, 1, 5, 0, 6, 7},
+	    {2, 3, 4, 0, 5, 1, 6, 7},
+	    {2, 3, 4, 1, 5, 0, 6, 7},
+	    {2, 3, 4, 0, 5, 1, 6, 7},
+		},
+	};
+__device__ constexpr block_iter_id src_A[2][4][PatternLen] = {
+		{
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 1, 3},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 0, 3},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 3, 3},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 2, 3},{-1, -1, -1},{-1, -1, -1},},
+		},
+		{
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 1, 3},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 0, 3},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 3, 3},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 2, 3},{-1, -1, -1},{-1, -1, -1},},
+		},
+	};
+__device__ constexpr block_iter_id src_B[2][4][PatternLen] = {
+		{
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 0, 3},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 1, 3},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 2, 3},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 3, 3},{-1, -1, -1},{-1, -1, -1},},
+		},
+		{
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 0, 3},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 1, 3},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 2, 3},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 3, 3},{-1, -1, -1},{-1, -1, -1},},
+		},
+	};
+__device__ constexpr block_iter_id dst_A[2][4][PatternLen] = {
+		{
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 1, 5},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 0, 5},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 3, 5},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 2, 5},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+		},
+		{
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 1, 5},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 0, 5},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 3, 5},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 2, 5},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+		},
+	};
+__device__ constexpr block_iter_id dst_B[2][4][PatternLen] = {
+		{
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 0, 5},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 1, 5},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 2, 5},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{1, 3, 5},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+		},
+		{
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 0, 5},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 1, 5},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 2, 5},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{0, 3, 5},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
+		},
+	};
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 /// GEMM collective code
@@ -227,79 +299,17 @@ struct CollectiveMmaGen
   static constexpr bool ConvertF32toTF32B = cute::is_same_v<float, ElementB>;
   using InternalElementA = cute::conditional_t<ConvertF32toTF32A, tfloat32_t, uint_bit_t<sizeof_bits_v<ElementA>>>;
   using InternalElementB = cute::conditional_t<ConvertF32toTF32B, tfloat32_t, uint_bit_t<sizeof_bits_v<ElementB>>>;
-	int8_t tile_order[2][4][PatternLen] = {
-		{
-	    {4, 0, 1, 5, 2, 6, 3, 7},
-	    {4, 1, 2, 5, 3, 6, 0, 7},
-	    {4, 2, 3, 5, 0, 6, 1, 7},
-	    {4, 3, 0, 5, 1, 6, 2, 7},
-		},
-		{
-	    {4, 1, 2, 5, 3, 6, 0, 7},
-	    {4, 2, 3, 5, 0, 6, 1, 7},
-	    {4, 3, 0, 5, 1, 6, 2, 7},
-	    {4, 0, 1, 5, 2, 6, 3, 7},
-		},
-	};
-	block_iter_id src_A[2][4][PatternLen] = {
-		{
-	    {{-1, -1, -1},{-1, -1, -1},{0, 1, 1},{-1, -1, -1},{0, 1, 2},{-1, -1, -1},{0, 1, 4},{-1, -1, -1},},
-	    {{-1, -1, -1},{-1, -1, -1},{0, 2, 1},{-1, -1, -1},{0, 2, 2},{-1, -1, -1},{0, 2, 4},{-1, -1, -1},},
-	    {{-1, -1, -1},{-1, -1, -1},{0, 3, 1},{-1, -1, -1},{0, 3, 2},{-1, -1, -1},{0, 3, 4},{-1, -1, -1},},
-	    {{-1, -1, -1},{-1, -1, -1},{0, 0, 1},{-1, -1, -1},{0, 0, 2},{-1, -1, -1},{0, 0, 4},{-1, -1, -1},},
-		},
-		{
-	    {{-1, -1, -1},{-1, -1, -1},{1, 1, 1},{-1, -1, -1},{1, 1, 2},{-1, -1, -1},{1, 1, 4},{-1, -1, -1},},
-	    {{-1, -1, -1},{-1, -1, -1},{1, 2, 1},{-1, -1, -1},{1, 2, 2},{-1, -1, -1},{1, 2, 4},{-1, -1, -1},},
-	    {{-1, -1, -1},{-1, -1, -1},{1, 3, 1},{-1, -1, -1},{1, 3, 2},{-1, -1, -1},{1, 3, 4},{-1, -1, -1},},
-	    {{-1, -1, -1},{-1, -1, -1},{1, 0, 1},{-1, -1, -1},{1, 0, 2},{-1, -1, -1},{1, 0, 4},{-1, -1, -1},},
-		},
-	};
-	block_iter_id src_B[2][4][PatternLen] = {
-		{
-	    {{-1, -1, -1},{-1, -1, -1},{1, 0, 1},{-1, -1, -1},{1, 0, 2},{-1, -1, -1},{1, 0, 4},{-1, -1, -1},},
-	    {{-1, -1, -1},{-1, -1, -1},{1, 1, 1},{-1, -1, -1},{1, 1, 2},{-1, -1, -1},{1, 1, 4},{-1, -1, -1},},
-	    {{-1, -1, -1},{-1, -1, -1},{1, 2, 1},{-1, -1, -1},{1, 2, 2},{-1, -1, -1},{1, 2, 4},{-1, -1, -1},},
-	    {{-1, -1, -1},{-1, -1, -1},{1, 3, 1},{-1, -1, -1},{1, 3, 2},{-1, -1, -1},{1, 3, 4},{-1, -1, -1},},
-		},
-		{
-	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-		},
-	};
-	block_iter_id dst_A[2][4][PatternLen] = {
-		{
-	    {{-1, -1, -1},{0, 3, 2},{0, 3, 4},{-1, -1, -1},{0, 3, 6},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{0, 0, 2},{0, 0, 4},{-1, -1, -1},{0, 0, 6},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{0, 1, 2},{0, 1, 4},{-1, -1, -1},{0, 1, 6},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{0, 2, 2},{0, 2, 4},{-1, -1, -1},{0, 2, 6},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-		},
-		{
-	    {{-1, -1, -1},{1, 3, 2},{1, 3, 4},{-1, -1, -1},{1, 3, 6},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{1, 0, 2},{1, 0, 4},{-1, -1, -1},{1, 0, 6},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{1, 1, 2},{1, 1, 4},{-1, -1, -1},{1, 1, 6},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{1, 2, 2},{1, 2, 4},{-1, -1, -1},{1, 2, 6},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-		},
-	};
-	block_iter_id dst_B[2][4][PatternLen] = {
-		{
-	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-		},
-		{
-	    {{-1, -1, -1},{0, 0, 2},{0, 0, 4},{-1, -1, -1},{0, 0, 6},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{0, 1, 2},{0, 1, 4},{-1, -1, -1},{0, 1, 6},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{0, 2, 2},{0, 2, 4},{-1, -1, -1},{0, 2, 6},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-	    {{-1, -1, -1},{0, 3, 2},{0, 3, 4},{-1, -1, -1},{0, 3, 6},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},},
-		},
-	};
 
   struct SharedStorage
   {
+    struct ScheduleStorage : cute::aligned_struct<128> {
+      int8_t tileOrder[2][4][PatternLen];
+      block_iter_id srcA[2][4][PatternLen];
+      block_iter_id srcB[2][4][PatternLen];
+      block_iter_id dstA[2][4][PatternLen];
+      block_iter_id dstB[2][4][PatternLen];
+    } schedules;
+
     struct TensorStorage : cute::aligned_struct<128> {
       cute::array_aligned<typename TiledMma::ValTypeA, cute::cosize_v<SmemLayoutA>> smem_A;
       cute::array_aligned<typename TiledMma::ValTypeB, cute::cosize_v<SmemLayoutB>> smem_B;
@@ -310,6 +320,7 @@ struct CollectiveMmaGen
   };
   using TensorStorage = typename SharedStorage::TensorStorage;
   using PipelineStorage = typename SharedStorage::PipelineStorage;
+  using ScheduleStorage = typename SharedStorage::ScheduleStorage;
 
   // Host side kernel arguments
   struct Arguments {
@@ -333,6 +344,7 @@ struct CollectiveMmaGen
         SmemLayoutB{}(_,_,0))); // force no mcast
     TMA_A tma_load_a;
     TMA_B tma_load_b;
+    void* workspace; 
   };
 
   //
@@ -366,7 +378,8 @@ struct CollectiveMmaGen
         SmemLayoutB{}(_,_,cute::Int<0>{})); // force no mcast
     return {
       tma_load_a,
-      tma_load_b
+      tma_load_b,
+      workspace
     };
   }
 
@@ -386,13 +399,32 @@ struct CollectiveMmaGen
     cute::prefetch_tma_descriptor(mainloop_params.tma_load_b.get_tma_descriptor());
   }
 
+  CUTLASS_DEVICE void static
+  init_schedule(ScheduleStorage& shared_schedules) {
+    if (threadIdx.x < 64) {
+      shared_schedules.tileOrder[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8]  = tile_order[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8];
+      shared_schedules.srcA[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].x     = src_A[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].x;
+      shared_schedules.srcA[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].y     = src_A[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].y;
+      shared_schedules.srcA[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].iter  = src_A[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].iter;
+      shared_schedules.srcB[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].x     = src_B[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].x;
+      shared_schedules.srcB[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].y     = src_B[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].y;
+      shared_schedules.srcB[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].iter  = src_B[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].iter;
+      shared_schedules.dstA[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].x     = dst_A[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].x;
+      shared_schedules.dstA[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].y     = dst_A[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].y;
+      shared_schedules.dstA[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].iter  = dst_A[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].iter;
+      shared_schedules.dstB[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].x     = dst_B[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].x;
+      shared_schedules.dstB[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].y     = dst_B[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].y;
+      shared_schedules.dstB[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].iter  = dst_B[(threadIdx.x / 32) % 2][(threadIdx.x / 8) % 4][threadIdx.x % 8].iter;
+    }
+  }
 
 /// Perform a collective-scoped matrix multiply-accumulate
   /// Producer Perspective
   template <
     class TensorA, class TMA_LOAD_A,
     class TensorB, class TMA_LOAD_B,
-    class KTileIterator
+    class KTileIterator,
+    class TensorDummyA, class TensorDummyB
   >
   CUTLASS_DEVICE void
   load(
@@ -410,7 +442,10 @@ struct CollectiveMmaGen
       int& sender_dsmem_copy_finish_phase,
       int& receiver_dsmem_copy_finish_phase,
       int& mma_wait_phase,
-      TensorStorage& shared_tensors
+      TensorStorage& shared_tensors,
+      ScheduleStorage& shared_schedules,
+      TensorDummyA const& dgtA,
+      TensorDummyB const& dgtB
       )
   {
     using namespace cute;
@@ -453,18 +488,20 @@ struct CollectiveMmaGen
       CUTLASS_PRAGMA_NO_UNROLL
       for ( ; k_tile_count > 0; --k_tile_count)
       {
+        uint32_t dummy_transaction_bytes_A = size<0>(SmemLayoutA{}) * size<1>(SmemLayoutA{}) * static_cast<uint32_t>(sizeof(ElementA));
+        uint32_t dummy_transaction_bytes_B = size<0>(SmemLayoutB{}) * size<1>(SmemLayoutB{}) * static_cast<uint32_t>(sizeof(ElementB));
         int write_stage = smem_pipe_write_physical.index();
-        block_iter_id src_id_A = src_A[bid.x][bid.y][k_iter % PatternLen];
-        block_iter_id src_id_B = src_B[bid.x][bid.y][k_iter % PatternLen];
+        block_iter_id src_id_A = shared_schedules.srcA[bid.x][bid.y][k_iter % PatternLen];
+        block_iter_id src_id_B = shared_schedules.srcB[bid.x][bid.y][k_iter % PatternLen];
         // LOCK smem_pipe_write_physical for _writing_
         pipeline.wait_empty(smem_pipe_write_physical, eA);
         pipeline.wait_empty(smem_pipe_write_physical, eB);
 
         if (src_id_A.x == -1 || src_id_A.y == -1) {
-          pipeline.copy_prepare(smem_pipe_write_logical, eA);
+          pipeline.copy_prepare(smem_pipe_write_logical, eA, (size<0>(SmemLayoutA{}) * size<1>(SmemLayoutA{}) * static_cast<uint32_t>(sizeof(ElementA))) + dummy_transaction_bytes_A * SIMULATE_MULTIPLE);
         }
         if (src_id_B.x == -1 || src_id_B.y == -1) {
-          pipeline.copy_prepare(smem_pipe_write_logical, eB);
+          pipeline.copy_prepare(smem_pipe_write_logical, eB, (size<0>(SmemLayoutB{}) * size<1>(SmemLayoutB{}) * static_cast<uint32_t>(sizeof(ElementB))) + dummy_transaction_bytes_B * SIMULATE_MULTIPLE);
         }
 
         //
@@ -475,22 +512,28 @@ struct CollectiveMmaGen
         BarrierType* tma_A_barrier = pipeline.producer_get_barrier(smem_pipe_write_logical, eA);
         BarrierType* tma_B_barrier = pipeline.producer_get_barrier(smem_pipe_write_logical, eB);
 
-        int k_tile_iter_AB = (k_iter / PatternLen) * PatternLen + tile_order[bid.x][bid.y][k_iter % PatternLen];
+        int k_tile_iter_AB = (k_iter / PatternLen) * PatternLen + shared_schedules.tileOrder[bid.x][bid.y][k_iter % PatternLen];
 
         // Check if this stage was sender on iteration (k_iter - K_PIPE_MAX)
         // If true, wait until the copy is done
         if (src_id_A.x == -1 || src_id_A.y == -1) {
-          if (( dst_A[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].x != -1 && 
-                dst_A[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].y != -1)) {
+          if (( shared_schedules.dstA[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].x != -1 && 
+                shared_schedules.dstA[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].y != -1)) {
             pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eA, k_iter % PatternLen);
+          }
+          for (int i=0; i<SIMULATE_MULTIPLE; i++) {
+            gmem2cta_copy_kernel(dgtA(k_iter,i,_).data().get(), tAsA(_,_,_,write_stage).data().get(), tma_A_barrier, dummy_transaction_bytes_A);
           }
           // TMA load A from gmem to smem
           copy(tma_load_a.with(*tma_A_barrier, mcast_mask_a), tAgA(_,_,_,k_tile_iter_AB), tAsA(_,_,_,write_stage));
         }
         if (src_id_B.x == -1 || src_id_B.y == -1) {
-          if (( dst_B[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].x != -1 && 
-                dst_B[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].y != -1)) {
+          if (( shared_schedules.dstB[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].x != -1 && 
+                shared_schedules.dstB[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].y != -1)) {
             pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eB, k_iter % PatternLen);
+          }
+          for (int i=0; i<SIMULATE_MULTIPLE; i++) {
+            gmem2cta_copy_kernel(dgtB(k_iter,i,_).data().get(), tBsB(_,_,_,write_stage).data().get(), tma_B_barrier, dummy_transaction_bytes_B);
           }
           // TMA load B from gmem to smem
           copy(tma_load_b.with(*tma_B_barrier, mcast_mask_b), tBgB(_,_,_,k_tile_iter_AB), tBsB(_,_,_,write_stage));
@@ -510,8 +553,8 @@ struct CollectiveMmaGen
       CUTLASS_PRAGMA_NO_UNROLL
       for (int i = 0; i < prev_left_steps; i++)
       {
-        block_iter_id src_id_A = src_A[bid.x][bid.y][k_iter % PatternLen];
-        block_iter_id src_id_B = src_B[bid.x][bid.y][k_iter % PatternLen];
+        block_iter_id src_id_A = shared_schedules.srcA[bid.x][bid.y][k_iter % PatternLen];
+        block_iter_id src_id_B = shared_schedules.srcB[bid.x][bid.y][k_iter % PatternLen];
         pipeline.copy_prepare(smem_pipe_write_logical, eA, 0, true);
         pipeline.copy_prepare(smem_pipe_write_logical, eB, 0, true);
 
@@ -520,14 +563,14 @@ struct CollectiveMmaGen
         BarrierType* tma_B_barrier = pipeline.producer_get_barrier(smem_pipe_write_logical, eB);
 
         if (src_id_A.x == -1 || src_id_A.y == -1) {
-          if (( dst_A[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].x != -1 && 
-                dst_A[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].y != -1)) {
+          if (( shared_schedules.dstA[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].x != -1 && 
+                shared_schedules.dstA[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].y != -1)) {
             pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eA, k_iter % PatternLen);
           }
         }
         if (src_id_B.x == -1 || src_id_B.y == -1) {
-          if (( dst_B[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].x != -1 && 
-                dst_B[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].y != -1)) {
+          if (( shared_schedules.dstB[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].x != -1 && 
+                shared_schedules.dstB[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].y != -1)) {
             pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eB, k_iter % PatternLen);
           }
         }
@@ -568,14 +611,14 @@ struct CollectiveMmaGen
       CUTLASS_PRAGMA_NO_UNROLL
       for (int i=0; i<PatternLen; i++) {
         sep_stage_A = i;
-        if (dst_A[bid.x][bid.y][i].iter >= K_PIPE_MAX) {
+        if (shared_schedules.dstA[bid.x][bid.y][i].iter >= K_PIPE_MAX) {
           break;
         }
       }
       CUTLASS_PRAGMA_NO_UNROLL
       for (int i=0; i<PatternLen; i++) {
         sep_stage_B = i;
-        if (dst_B[bid.x][bid.y][i].iter >= K_PIPE_MAX) {
+        if (shared_schedules.dstB[bid.x][bid.y][i].iter >= K_PIPE_MAX) {
           break;
         }
       }
@@ -587,8 +630,8 @@ struct CollectiveMmaGen
       for ( ; k_tile_count > 0; --k_tile_count)
       {
         using BarrierType = typename MainloopPipeline::ProducerBarrierType;
-        block_iter_id dst_id_A = dst_A[bid.x][bid.y][k_iter % PatternLen];
-        block_iter_id dst_id_B = dst_B[bid.x][bid.y][k_iter % PatternLen];
+        block_iter_id dst_id_A = shared_schedules.dstA[bid.x][bid.y][k_iter % PatternLen];
+        block_iter_id dst_id_B = shared_schedules.dstB[bid.x][bid.y][k_iter % PatternLen];
         int dst_A_stage = (dst_id_A.iter - (k_iter % PatternLen) + smem_pipe_dsmem_send.index()) % K_PIPE_MAX;
         int dst_B_stage = (dst_id_B.iter - (k_iter % PatternLen) + smem_pipe_dsmem_send.index()) % K_PIPE_MAX;
 
@@ -597,39 +640,38 @@ struct CollectiveMmaGen
           // wait sender buffer ready, may have bug (double consumer wait?)
           pipeline.sender_wait_sender_ready(sender_ready_phase, eA, k_iter % PatternLen);
           pipeline.sender_wait_receiver_ready(receiver_ready_state_A, eA);
-          if (dst_A[dst_id_A.x][dst_id_A.y][((dst_id_A.iter - K_PIPE_MAX) + PatternLen) % PatternLen].x != -1 && 
-              dst_A[dst_id_A.x][dst_id_A.y][((dst_id_A.iter - K_PIPE_MAX) + PatternLen) % PatternLen].y != -1) {
+          if (shared_schedules.dstA[dst_id_A.x][dst_id_A.y][((dst_id_A.iter - K_PIPE_MAX) + PatternLen) % PatternLen].x != -1 && 
+              shared_schedules.dstA[dst_id_A.x][dst_id_A.y][((dst_id_A.iter - K_PIPE_MAX) + PatternLen) % PatternLen].y != -1) {
             pipeline.sync_wait(sender_ready_phase, eA, k_iter % PatternLen);
           }
           uint32_t block_id = dst_id_A.x + dst_id_A.y * size<0>(ClusterShape{});
-          pipeline.dsmem_copy_prepare(TransactionBytesA, block_id, eA, dst_id_A.iter % PatternLen);
+          pipeline.dsmem_copy_prepare(((TransactionBytesA / Dsmem_ACC) / 128) * 128, block_id, eA, dst_id_A.iter % PatternLen);
           BarrierType* tma_A_barrier = pipeline.producer_get_barrier_by_stage(dst_id_A.iter % PatternLen, eA);
           dsmem_copy_func(block_id,
                           tAsA(_,_,_,smem_pipe_dsmem_send.index()).data().get(), 
                           tAsA(_,_,_,dst_A_stage).data().get(), 
                           tma_A_barrier, 
-                          TransactionBytesA
+                          ((TransactionBytesA / Dsmem_ACC) / 128) * 128
                           );
         }
         if (dst_id_B.x != -1 && dst_id_B.y != -1) {
           // wait sender buffer ready, may have bug (double consumer wait?)
           pipeline.sender_wait_sender_ready(sender_ready_phase, eB, k_iter % PatternLen);
           pipeline.sender_wait_receiver_ready(receiver_ready_state_B, eB);
-          if (dst_B[dst_id_B.x][dst_id_B.y][((dst_id_B.iter - K_PIPE_MAX) + PatternLen) % PatternLen].x != -1 && 
-              dst_B[dst_id_B.x][dst_id_B.y][((dst_id_B.iter - K_PIPE_MAX) + PatternLen) % PatternLen].y != -1) {
+          if (shared_schedules.dstB[dst_id_B.x][dst_id_B.y][((dst_id_B.iter - K_PIPE_MAX) + PatternLen) % PatternLen].x != -1 && 
+              shared_schedules.dstB[dst_id_B.x][dst_id_B.y][((dst_id_B.iter - K_PIPE_MAX) + PatternLen) % PatternLen].y != -1) {
             pipeline.sync_wait(sender_ready_phase, eB, k_iter % PatternLen);
           }
           uint32_t block_id = dst_id_B.x + dst_id_B.y * size<0>(ClusterShape{});
-          pipeline.dsmem_copy_prepare(TransactionBytesB, block_id, eB, dst_id_B.iter % PatternLen);
+          pipeline.dsmem_copy_prepare(((TransactionBytesB / Dsmem_ACC) / 128) * 128, block_id, eB, dst_id_B.iter % PatternLen);
           BarrierType* tma_B_barrier = pipeline.producer_get_barrier_by_stage(dst_id_B.iter % PatternLen, eB);
           dsmem_copy_func(block_id,
                           tBsB(_,_,_,smem_pipe_dsmem_send.index()).data().get(), 
                           tBsB(_,_,_,dst_B_stage).data().get(), 
                           tma_B_barrier, 
-                          TransactionBytesB
+                          ((TransactionBytesB / Dsmem_ACC) / 128) * 128
                           );
         }
-
         ++k_iter;
         ++receiver_ready_state_A;
         ++receiver_ready_state_B;
@@ -642,16 +684,16 @@ struct CollectiveMmaGen
       CUTLASS_PRAGMA_NO_UNROLL
       for (int i = 0; i < prev_left_steps; i++)
       {
-        block_iter_id dst_id_A = dst_A[bid.x][bid.y][k_iter % PatternLen];
-        block_iter_id dst_id_B = dst_B[bid.x][bid.y][k_iter % PatternLen];
+        block_iter_id dst_id_A = shared_schedules.dstA[bid.x][bid.y][k_iter % PatternLen];
+        block_iter_id dst_id_B = shared_schedules.dstB[bid.x][bid.y][k_iter % PatternLen];
 
         // wait receiver's arrive
         if (dst_id_A.x != -1 && dst_id_A.y != -1) {
           // wait sender buffer ready, may have bug (double consumer wait?)
           pipeline.sender_wait_sender_ready(sender_ready_phase, eA, k_iter % PatternLen);
           pipeline.sender_wait_receiver_ready(receiver_ready_state_A, eA);
-          if (dst_A[dst_id_A.x][dst_id_A.y][((dst_id_A.iter - K_PIPE_MAX) + PatternLen) % PatternLen].x != -1 && 
-              dst_A[dst_id_A.x][dst_id_A.y][((dst_id_A.iter - K_PIPE_MAX) + PatternLen) % PatternLen].y != -1) {
+          if (shared_schedules.dstA[dst_id_A.x][dst_id_A.y][((dst_id_A.iter - K_PIPE_MAX) + PatternLen) % PatternLen].x != -1 && 
+              shared_schedules.dstA[dst_id_A.x][dst_id_A.y][((dst_id_A.iter - K_PIPE_MAX) + PatternLen) % PatternLen].y != -1) {
             pipeline.sync_wait(sender_ready_phase, eA, k_iter % PatternLen);
           }
         }
@@ -659,8 +701,8 @@ struct CollectiveMmaGen
           // wait sender buffer ready, may have bug (double consumer wait?)
           pipeline.sender_wait_sender_ready(sender_ready_phase, eB, k_iter % PatternLen);
           pipeline.sender_wait_receiver_ready(receiver_ready_state_B, eB);
-          if (dst_B[dst_id_B.x][dst_id_B.y][((dst_id_B.iter - K_PIPE_MAX) + PatternLen) % PatternLen].x != -1 && 
-              dst_B[dst_id_B.x][dst_id_B.y][((dst_id_B.iter - K_PIPE_MAX) + PatternLen) % PatternLen].y != -1) {
+          if (shared_schedules.dstB[dst_id_B.x][dst_id_B.y][((dst_id_B.iter - K_PIPE_MAX) + PatternLen) % PatternLen].x != -1 && 
+              shared_schedules.dstB[dst_id_B.x][dst_id_B.y][((dst_id_B.iter - K_PIPE_MAX) + PatternLen) % PatternLen].y != -1) {
             pipeline.sync_wait(sender_ready_phase, eB, k_iter % PatternLen);
           }
         }
@@ -682,8 +724,8 @@ struct CollectiveMmaGen
       k_tile_count +=  prev_left_steps;
       CUTLASS_PRAGMA_NO_UNROLL
       for ( ; k_tile_count > 0; --k_tile_count) {
-        block_iter_id src_id_A = src_A[bid.x][bid.y][k_iter % PatternLen];
-        block_iter_id src_id_B = src_B[bid.x][bid.y][k_iter % PatternLen];
+        block_iter_id src_id_A = shared_schedules.srcA[bid.x][bid.y][k_iter % PatternLen];
+        block_iter_id src_id_B = shared_schedules.srcB[bid.x][bid.y][k_iter % PatternLen];
         // Copy on this iteration is from dsmem
         if (src_id_A.x != -1 && src_id_A.y != -1) {
           uint32_t block_id = src_id_A.x + src_id_A.y * size<0>(ClusterShape{});
@@ -709,19 +751,19 @@ struct CollectiveMmaGen
       k_tile_count +=  prev_left_steps;
       CUTLASS_PRAGMA_NO_UNROLL
       for ( ; k_tile_count > 0; --k_tile_count) {
-        if (( dst_A[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].x != -1 && 
-              dst_A[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].y != -1)) {
+        if (( shared_schedules.dstA[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].x != -1 && 
+              shared_schedules.dstA[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].y != -1)) {
           pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eA, k_iter % PatternLen);
-          block_iter_id src_id_A = src_A[bid.x][bid.y][k_iter % PatternLen];
+          block_iter_id src_id_A = shared_schedules.srcA[bid.x][bid.y][k_iter % PatternLen];
           if (src_id_A.x != -1 && src_id_A.y != -1) {
             uint32_t block_id = src_id_A.x + src_id_A.y * size<0>(ClusterShape{});
             pipeline.sync_arrive(block_id, eA, src_id_A.iter);
           }
         }
-        if (( dst_B[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].x != -1 && 
-              dst_B[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].y != -1)) {
+        if (( shared_schedules.dstB[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].x != -1 && 
+              shared_schedules.dstB[bid.x][bid.y][((k_iter - K_PIPE_MAX) % PatternLen + PatternLen) % PatternLen].y != -1)) {
           pipeline.sender_wait_dsmem_copy_finish(sender_dsmem_copy_finish_phase, eB, k_iter % PatternLen);
-          block_iter_id src_id_B = src_B[bid.x][bid.y][k_iter % PatternLen];
+          block_iter_id src_id_B = shared_schedules.srcB[bid.x][bid.y][k_iter % PatternLen];
           if (src_id_B.x != -1 && src_id_B.y != -1) {
             uint32_t block_id = src_id_B.x + src_id_B.y * size<0>(ClusterShape{});
             pipeline.sync_arrive(block_id, eB, src_id_B.iter);
@@ -770,6 +812,7 @@ struct CollectiveMmaGen
       int k_tile_count,
       int thread_idx,
       TensorStorage& shared_tensors,
+      ScheduleStorage& shared_schedules,
       Params const& mainloop_params
       )
   {
@@ -879,9 +922,9 @@ struct CollectiveMmaGen
       warpgroup_fence_operand(accum);
 
       // Use dsmem as input when using this stage the next time
-      block_iter_id src_id_A = src_A[bid.x][bid.y][(k_release_iter + K_PIPE_MAX) % PatternLen];
-      block_iter_id src_id_B = src_B[bid.x][bid.y][(k_release_iter + K_PIPE_MAX) % PatternLen];
       if (threadIdx.x == 128 || threadIdx.x == 256) {
+        block_iter_id src_id_A = shared_schedules.srcA[bid.x][bid.y][(k_release_iter + K_PIPE_MAX) % PatternLen];
+        block_iter_id src_id_B = shared_schedules.srcB[bid.x][bid.y][(k_release_iter + K_PIPE_MAX) % PatternLen];
         if (src_id_A.x != -1 && src_id_A.y != -1) {
           uint32_t block_id = src_id_A.x + src_id_A.y * size<0>(ClusterShape{});
           pipeline.receiver_arrive_sender(block_id, eA, src_id_A.iter);
@@ -910,6 +953,7 @@ struct CollectiveMmaGen
   mma_tail( MainloopPipeline pipeline, 
             PhysicalPipelineState smem_pipe_release, 
             LogicalPipelineState smem_pipe_read_logical,
+            ScheduleStorage& shared_schedules,
             int k_tile_count) {
     // Prologue GMMAs
     int prologue_mma_count = min(K_PIPE_MMAS, k_tile_count);
@@ -926,8 +970,8 @@ struct CollectiveMmaGen
     warpgroup_wait<0>();
 
     for (int count = 0; count < prologue_mma_count; ++count) {
-      block_iter_id src_id_A = src_A[bid.x][bid.y][(k_iter + K_PIPE_MAX) % PatternLen];
-      block_iter_id src_id_B = src_B[bid.x][bid.y][(k_iter + K_PIPE_MAX) % PatternLen];
+      block_iter_id src_id_A = shared_schedules.srcA[bid.x][bid.y][(k_iter + K_PIPE_MAX) % PatternLen];
+      block_iter_id src_id_B = shared_schedules.srcB[bid.x][bid.y][(k_iter + K_PIPE_MAX) % PatternLen];
       // pipeline.consumer_release(smem_pipe_release);     // UNLOCK smem_pipe_release, done _computing_ on it
       if (threadIdx.x == 128 || threadIdx.x == 256) {
         if (src_id_A.x != -1 && src_id_A.y != -1) {
@@ -947,8 +991,8 @@ struct CollectiveMmaGen
 
     for (int i = 0; i < prev_left_steps; ++i) {
       pipeline.consumer_wait(smem_pipe_read_logical);
-      block_iter_id src_id_A = src_A[bid.x][bid.y][(k_iter + K_PIPE_MAX) % PatternLen];
-      block_iter_id src_id_B = src_B[bid.x][bid.y][(k_iter + K_PIPE_MAX) % PatternLen];
+      block_iter_id src_id_A = shared_schedules.srcA[bid.x][bid.y][(k_iter + K_PIPE_MAX) % PatternLen];
+      block_iter_id src_id_B = shared_schedules.srcB[bid.x][bid.y][(k_iter + K_PIPE_MAX) % PatternLen];
       if (threadIdx.x == 128 || threadIdx.x == 256) {
         if (src_id_A.x != -1 && src_id_A.y != -1) {
           uint32_t block_id = src_id_A.x + src_id_A.y * size<0>(ClusterShape{});
@@ -999,7 +1043,7 @@ using CollectiveMainloop = cutlass::gemm::collective::CollectiveMmaGen<
       cute::identity
     >;
 
-using GemmKernel = cutlass::gemm::kernel::GemmUniversalGen<
+using GemmKernel = cutlass::gemm::kernel::GemmUniversalGenSimGmem<
     Shape<int,int,int>, // Indicates ProblemShape
     CollectiveMainloop,
     CollectiveEpilogue
@@ -1059,7 +1103,7 @@ struct Options {
     help(false),
     m(16384), n(16384), k(16384),
     alpha(1.f), beta(0.f),
-    iterations(1)
+    iterations(10)
   { }
 
   // Parses the command line
@@ -1156,8 +1200,6 @@ bool initialize_block(
     scope_min = -8;
   }
 
-  // scope_max = 1;
-  // scope_min = 1;
   cutlass::reference::device::BlockFillRandomUniform(
     block.get(), block.size(), seed, scope_max, scope_min, 0);
 
