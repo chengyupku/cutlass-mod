@@ -107,6 +107,11 @@ public:
 
   // Kernel level shared memory storage
   struct SharedStorage {
+    struct ScheduleStorage : cute::aligned_struct<128> {
+      using MainloopScheduleStorage = typename CollectiveMainloop::ScheduleStorage;
+      alignas(128) MainloopScheduleStorage schedule;
+    } schedules;
+
     struct TensorStorage : cute::aligned_struct<128> {
       using MainloopTensorStorage = typename CollectiveMainloop::TensorStorage;
       using EpilogueTensorStorage = typename CollectiveEpilogue::TensorStorage;
@@ -297,6 +302,8 @@ public:
       CollectiveEpilogue::prefetch_tma_descriptors(params.epilogue);
     }
 
+    CollectiveMainloop::init_schedule(shared_storage.schedules.schedule);
+
     // Mainloop Load pipeline
     using MainloopPipeline = typename CollectiveMainloop::MainloopPipeline;
     typename MainloopPipeline::Params mainloop_pipeline_params;
@@ -449,7 +456,8 @@ public:
           sender_dsmem_copy_finish_phase,
           receiver_dsmem_copy_finish_phase,
           mma_wait_phase,
-          shared_storage.tensors.mainloop
+          shared_storage.tensors.mainloop,
+          shared_storage.schedules.schedule
           #if PROFILE
           , issue_copy_B
           , copy_B_done
@@ -543,6 +551,7 @@ public:
           k_tile_count,
           mma_thread_idx,
           shared_storage.tensors.mainloop,
+          shared_storage.schedules.schedule,
           params.mainloop
           #if PROFILE
           , consumer_wait_latency
@@ -556,6 +565,7 @@ public:
           mainloop_pipeline,
           mainloop_pipe_consumer_physical_state,
           mainloop_pipe_consumer_logical_state,
+          shared_storage.schedules.schedule,
           k_tile_count
         );
         // Update starting mainloop pipeline state for the next tile

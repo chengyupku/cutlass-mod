@@ -304,9 +304,7 @@ public:
       CollectiveEpilogue::prefetch_tma_descriptors(params.epilogue);
     }
 
-    if (threadIdx.x < 64) {
-      CollectiveMainloop::init_schedule(shared_storage.schedules.schedule);
-    }
+    CollectiveMainloop::init_schedule(shared_storage.schedules.schedule);
 
     // Mainloop Load pipeline
     using MainloopPipeline = typename CollectiveMainloop::MainloopPipeline;

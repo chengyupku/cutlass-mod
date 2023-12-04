@@ -1,9 +1,9 @@
 #include <iostream>
+#include <cstddef>
+#include <climits>
 
 int main() {
-  int iter = 3;
-  int K_PIPE_MAX = 60;
-  int PatternLen = 4;
-  printf("%d\n", (iter - K_PIPE_MAX) % PatternLen);
-  return 0;
+    std::cout << "Size of size_t: " << sizeof(size_t) << " bytes\n";
+    std::cout << "Maximum value of size_t: " << SIZE_MAX << "\n";
+    return 0;
 }

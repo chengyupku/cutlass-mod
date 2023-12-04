@@ -1,13 +1,52 @@
+import argparse
 import json
 import cutlass_code
+import glob
+import os
 
 valid_cluster_shape = [1, 2, 4, 8, 16]
-cluster_shape = [2, 4, 1]
+cluster_shape = [4, 4, 1]
 PatternLen = 8
 assert (cs in valid_cluster_shape for cs in cluster_shape) and (cluster_shape[0] * cluster_shape[1] * cluster_shape[2] <= 16), "Invalid cluster shape!"
 ClusterShape_code = "using ClusterShape = Shape<_{},_{},_{}>; // Shape of the threadblocks in a cluster\n".format(cluster_shape[0], cluster_shape[1], cluster_shape[2])
 PatternLen_code = "static constexpr int PatternLen = {};\n".format(PatternLen)
+array_shape = "[{}][{}][PatternLen]".format(cluster_shape[0], cluster_shape[1])
+shared_storage_code = """
+struct SharedStorage
+  {{
+    struct ScheduleStorage : cute::aligned_struct<128> {{
+      int8_t tileOrder{};
+      block_iter_id srcA{};
+      block_iter_id srcB{};
+      block_iter_id dstA{};
+      block_iter_id dstB{};
+    }} schedules;
 
+    struct TensorStorage : cute::aligned_struct<128> {{
+      cute::array_aligned<typename TiledMma::ValTypeA, cute::cosize_v<SmemLayoutA>> smem_A;
+      cute::array_aligned<typename TiledMma::ValTypeB, cute::cosize_v<SmemLayoutB>> smem_B;
+    }} tensors;
+
+    using PipelineStorage = typename MainloopPipeline::SharedStorage;
+    PipelineStorage pipeline;
+  }};
+""".format(array_shape, array_shape, array_shape, array_shape, array_shape)
+
+init_schedule_func_code = """
+  CUTLASS_DEVICE void static
+  init_schedule(ScheduleStorage& shared_schedules) {
+"""
+init_schedule_func_code += "\t\tif (threadIdx.x < {}) {{\n".format(cluster_shape[0] * cluster_shape[1] * PatternLen)
+index_code = "[(threadIdx.x / {}) % {}][(threadIdx.x / {}) % {}][threadIdx.x % {}]"\
+            .format(cluster_shape[1] * PatternLen, cluster_shape[0], PatternLen, cluster_shape[1], PatternLen)
+init_schedule_func_code += "\t\t\tshared_schedules.tileOrder{} = tile_order{};\n".format(index_code, index_code)
+for arr_s, arr_d in zip(['srcA', 'srcB', 'dstA', 'dstB'], ['src_A', 'src_B', 'dst_A', 'dst_B']):
+    for var in ['x', 'y', 'iter']:
+        init_schedule_func_code += "\t\t\tshared_schedules.{}{} = {}{};\n".format(arr_s, index_code, arr_d, index_code)
+
+init_schedule_func_code += """    }
+  }
+"""
 
 def generate_int_array(l):
     return '{' + ', '.join(map(str, l)) + '}'
@@ -22,11 +61,11 @@ def generate_dim3_array(l):
 def gen_tile_order_code(l, sA, sB, dA, dB):
     code = ""
     array_shape = "[{}][{}][PatternLen]".format(cluster_shape[0], cluster_shape[1])
-    tile_order_code = "\tint8_t tile_order" + array_shape + " = {\n"
-    src_A_code = "\tblock_iter_id src_A" + array_shape + " = {\n"
-    src_B_code = "\tblock_iter_id src_B" + array_shape + " = {\n"
-    dst_A_code = "\tblock_iter_id dst_A" + array_shape + " = {\n"
-    dst_B_code = "\tblock_iter_id dst_B" + array_shape + " = {\n"
+    tile_order_code = "__device__ constexpr int8_t tile_order" + array_shape + " = {\n"
+    src_A_code = "__device__ constexpr block_iter_id src_A" + array_shape + " = {\n"
+    src_B_code = "__device__ constexpr block_iter_id src_B" + array_shape + " = {\n"
+    dst_A_code = "__device__ constexpr block_iter_id dst_A" + array_shape + " = {\n"
+    dst_B_code = "__device__ constexpr block_iter_id dst_B" + array_shape + " = {\n"
     # code += "if (bid.x == 0) {\n"
     for x, [x_l_group, x_sA_group, x_sB_group, x_dA_group, x_dB_group] in enumerate(zip(l, sA, sB, dA, dB)):
         tile_order_code += "\t\t{\n"
@@ -68,8 +107,19 @@ def parse_src(s):
         return [int(number) for number in numbers]
 
 if __name__ == '__main__':
-    with open('schedule.json', 'r', encoding='utf-8') as file:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--simulate_multiple", type=int, default=0)
+    parser.add_argument("--dsmem_accelerate", type=int, default=1)
+    parser.add_argument("--schedule_path", type=str, default="")
+    args = parser.parse_args()
+
+    with open(args.schedule_path, 'r', encoding='utf-8') as file:
         schedule_list = json.load(file)
+
+    pattern = "../examples/97_gemm_codegen/*_gemm_codegen.cu"
+    for filename in glob.glob(pattern):
+        print(f"Deleting {filename}...")
+        os.remove(filename)
 
     for sid in range(len(schedule_list)):
         schedule = schedule_list[sid]["schedule"]
@@ -113,14 +163,20 @@ if __name__ == '__main__':
                         src_B[xB][yB][dst_Bk][-1] = k
 
         code = ""
+        code += "#define SIMULATE_MULTIPLE {}\n".format(args.simulate_multiple)
+        code += "#define Dsmem_ACC {}\n".format(args.dsmem_accelerate)
         code += cutlass_code.header_0
         code += ClusterShape_code
         code += PatternLen_code
         code += cutlass_code.header_1
-        code += cutlass_code.collective_mma_code_0
         code += gen_tile_order_code(tileid, src_A, src_B, dst_A, dst_B)
+        code += cutlass_code.collective_mma_code_0
+        code += shared_storage_code
         code += cutlass_code.collective_mma_code_1
+        code += init_schedule_func_code
+        code += cutlass_code.collective_mma_code_2
         code += cutlass_code.tail
         # print(code)
+        # break
         with open('../examples/97_gemm_codegen/{}_gemm_codegen.cu'.format(sid), 'w') as file:
             print(code, file=file)

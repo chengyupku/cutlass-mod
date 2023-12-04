@@ -22,11 +22,11 @@ def cost_model():
     return 0
 
 def search():
-    noc_group_size = 2
+    noc_group_size = 1
     schedule_id = 0
     schedule_list = []
-    while noc_group_size <= cluster_y_size:
-        print("noc_group_size={}".format(noc_group_size))
+    while noc_group_size <= max(cluster_x_size, cluster_y_size):
+        # print("noc_group_size={}".format(noc_group_size))
         
         # schedule_per_blk = [
         #             {"tileid": 0, "src": "gmem"},
@@ -36,17 +36,18 @@ def search():
         #         ]
         
         noc_group_pair_num = 1
-        while noc_group_pair_num * noc_group_size <= cluster_y_size:
-            print(" noc_group_pair_num={}".format(noc_group_pair_num))
+        while noc_group_pair_num * noc_group_size <= pattern_len:
+            # print(" noc_group_pair_num={}".format(noc_group_pair_num))
             k_list = []
             for outer in range(noc_group_pair_num):
                 for inner in range(noc_group_size - 1):
                     k_list.append(1 + outer * noc_group_size + inner)
-            # print(k_list)
+            print("k_list,", k_list)
 
             indep_tile_num = pattern_len - noc_group_pair_num * noc_group_size
             bowl_num = noc_group_pair_num * noc_group_size + 1
             insert_indep_tile_list = put_balls(indep_tile_num, bowl_num)
+            print("insert_indep_tile_list,", insert_indep_tile_list)
             filtered = [i for i in insert_indep_tile_list if all(i[k] < buffer_num - 2 for k in k_list)]
             # print(filtered)
             for f in filtered:
@@ -66,7 +67,7 @@ def search():
                     if noc_group_tile_id < noc_group_pair_num * noc_group_size:
                         base_order.append(noc_group_tile_id)
                         noc_group_tile_id += 1
-                print(base_order)
+                print("base_order:", base_order)
                 
                 
                 for xid in range(cluster_x_size):
@@ -102,7 +103,11 @@ def search():
                     schedule["schedule"].append(schedule_per_x)
                 schedule_list.append(schedule)
                 schedule_id += 1
+                if (noc_group_size == 1):
+                    break
             noc_group_pair_num += 1
+            if (noc_group_size == 1):
+                break
         noc_group_size *= 2
     return schedule_list
 
@@ -122,5 +127,5 @@ if __name__ == '__main__':
 
     schedule_list = search()
     print("find {} schedules".format(len(schedule_list)))
-    with open('schedule.json', 'w') as file:
-        json.dump(schedule_list, file, indent=4)
+    # with open('schedule.json', 'w') as file:
+    #     json.dump(schedule_list, file, indent=4)
