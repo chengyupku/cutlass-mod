@@ -132,8 +132,10 @@ foreach(EXAMPLE
   49_hopper_gemm_with_collective_builder
   50_hopper_gemm_with_epilogue_swizzle
   51_hopper_gett
+  94_block_sparse_gemm
+  95_good_perf_hgemm
   96_code
-  97_gemm_codegen
+  # 97_gemm_codegen
   98_gemm_softmax
   99_kernel_test
   )
